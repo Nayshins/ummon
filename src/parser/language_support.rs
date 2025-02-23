@@ -1,5 +1,5 @@
 use anyhow::Result;
-use tree_sitter::Parser;
+use tree_sitter::{Parser, Tree};
 
 #[derive(Debug)]
 pub struct FunctionDef {
@@ -8,13 +8,17 @@ pub struct FunctionDef {
 
 pub struct RustParser {
     parser: Parser,
+    tree: Option<Tree>,
 }
 
 impl RustParser {
     pub fn new() -> Self {
         let mut parser = Parser::new();
         parser.set_language(tree_sitter_rust::language()).unwrap();
-        Self { parser }
+        Self { 
+            parser,
+            tree: None,
+        }
     }
 
     /// Parse code and return top-level fn names
@@ -32,12 +36,12 @@ impl RustParser {
 
     /// Return (fn_name, AST node)
     pub fn parse_functions_ast<'a>(&'a mut self, code: &str) -> Result<Vec<(String, tree_sitter::Node<'a>)>> {
-        let tree = self
+        self.tree = Some(self
             .parser
             .parse(code, None)
-            .ok_or_else(|| anyhow::anyhow!("Failed to parse code"))?;
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse code"))?);
 
-        let root = tree.root_node();
+        let root = self.tree.as_ref().unwrap().root_node();
         let mut out = Vec::new();
         collect_function_nodes(root, code, &mut out);
         Ok(out)
