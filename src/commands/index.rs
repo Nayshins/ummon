@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::fs;
 
 use crate::graph::knowledge_graph::KnowledgeGraph;
-use crate::parser::language_support::RustParser;
+use crate::parser::language_support::rust::RustParser;
 use crate::parser::call_graph;
 
 /// Now an async fn, though we don't do real async I/O here—just for consistency
