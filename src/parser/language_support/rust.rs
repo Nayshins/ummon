@@ -55,29 +55,34 @@ impl LanguageParser for RustParser {
         Ok(out)
     }
 
-    fn parse_functions_ast(&mut self, content: &str) -> Result<Vec<(String, tree_sitter::Node)>> {
-        let tree = self.parser.parse(content, self.tree.as_ref())
-            .ok_or_else(|| anyhow::anyhow!("Failed to parse code"))?;
+    fn parse_functions_ast<'a>(&'a mut self, content: &str) -> Result<Vec<(String, tree_sitter::Node<'a>)>> {
+        // First store the tree
+        self.tree = Some(self.parser.parse(content, self.tree.as_ref())
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse code"))?);
         
-        let root = tree.root_node();
         let mut out = Vec::new();
         
-        fn collect_functions<'a>(node: tree_sitter::Node<'a>, code: &str, funcs: &mut Vec<(String, tree_sitter::Node<'a>)>) {
-            if node.kind() == "function_item" {
-                if let Some(name_node) = node.child_by_field_name("name") {
-                    let name_str = &code[name_node.start_byte()..name_node.end_byte()];
-                    funcs.push((name_str.to_string(), node));
+        // Now get nodes from the stored tree
+        if let Some(tree) = &self.tree {
+            let root = tree.root_node();
+            
+            fn collect_functions<'a>(node: tree_sitter::Node<'a>, code: &str, funcs: &mut Vec<(String, tree_sitter::Node<'a>)>) {
+                if node.kind() == "function_item" {
+                    if let Some(name_node) = node.child_by_field_name("name") {
+                        let name_str = &code[name_node.start_byte()..name_node.end_byte()];
+                        funcs.push((name_str.to_string(), node));
+                    }
+                }
+                for i in 0..node.child_count() {
+                    if let Some(child) = node.child(i) {
+                        collect_functions(child, code, funcs);
+                    }
                 }
             }
-            for i in 0..node.child_count() {
-                if let Some(child) = node.child(i) {
-                    collect_functions(child, code, funcs);
-                }
-            }
-        }
 
-        collect_functions(root, content, &mut out);
-        self.tree = Some(tree);
+            collect_functions(root, content, &mut out);
+        }
+        
         Ok(out)
     }
 }
