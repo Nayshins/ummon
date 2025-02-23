@@ -26,7 +26,7 @@ pub async fn run(path: &str) -> Result<()> {
         .collect::<Vec<_>>();
 
     // 3. Initialize a Rust parser
-    let rust_parser = RustParser::new();
+    let mut rust_parser = RustParser::new();
 
     // We'll keep a map: (file_path, fn_name) -> NodeIndex
     let mut fn_map = std::collections::HashMap::new();

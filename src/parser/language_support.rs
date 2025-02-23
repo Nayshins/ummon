@@ -31,7 +31,7 @@ impl RustParser {
     }
 
     /// Return (fn_name, AST node)
-    pub fn parse_functions_ast(&mut self, code: &str) -> Result<Vec<(String, tree_sitter::Node<'_>)>> {
+    pub fn parse_functions_ast<'a>(&'a mut self, code: &str) -> Result<Vec<(String, tree_sitter::Node<'a>)>> {
         let tree = self
             .parser
             .parse(code, None)
