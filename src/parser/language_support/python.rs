@@ -23,7 +23,7 @@ impl LanguageParser for PythonParser {
         todo!()
     }
 
-    fn parse_functions_ast(&mut self, _content: &str) -> Result<Vec<(String, String)>> {
+    fn parse_functions_ast(&mut self, _content: &str) -> Result<Vec<(String, tree_sitter::Node)>> {
         // Implement Python-specific AST parsing
         todo!() 
     }
