@@ -1,5 +1,5 @@
 use anyhow::Result;
-use tree_sitter::{Parser, Tree};
+use tree_sitter::Parser;
 
 #[derive(Debug)]
 pub struct FunctionDef {
@@ -18,7 +18,7 @@ impl RustParser {
     }
 
     /// Parse code and return top-level fn names
-    pub fn parse_functions(&self, code: &str) -> Result<Vec<FunctionDef>> {
+    pub fn parse_functions(&mut self, code: &str) -> Result<Vec<FunctionDef>> {
         let tree = self
             .parser
             .parse(code, None)
@@ -31,7 +31,7 @@ impl RustParser {
     }
 
     /// Return (fn_name, AST node)
-    pub fn parse_functions_ast(&self, code: &str) -> Result<Vec<(String, tree_sitter::Node)>> {
+    pub fn parse_functions_ast(&mut self, code: &str) -> Result<Vec<(String, tree_sitter::Node<'_>)>> {
         let tree = self
             .parser
             .parse(code, None)
@@ -60,10 +60,10 @@ fn collect_function_items(node: tree_sitter::Node, code: &str, funcs: &mut Vec<F
     }
 }
 
-fn collect_function_nodes(
-    node: tree_sitter::Node,
+fn collect_function_nodes<'a>(
+    node: tree_sitter::Node<'a>,
     code: &str,
-    funcs: &mut Vec<(String, tree_sitter::Node)>,
+    funcs: &mut Vec<(String, tree_sitter::Node<'a>)>,
 ) {
     if node.kind() == "function_item" {
         if let Some(name_node) = node.child_by_field_name("name") {
