@@ -6,8 +6,8 @@ pub mod python;
 
 pub trait LanguageParser {
     fn can_handle(&self, file_path: &Path) -> bool;
-    fn parse_functions(&self, content: &str) -> Result<Vec<FunctionDefinition>>;
-    fn parse_functions_ast(&self, content: &str) -> Result<Vec<(String, syn::ItemFn)>>;
+    fn parse_functions(&mut self, content: &str) -> Result<Vec<FunctionDefinition>>;
+    fn parse_functions_ast(&mut self, content: &str) -> Result<Vec<(String, syn::ItemFn)>>;
 }
 
 #[derive(Debug, Clone)]
