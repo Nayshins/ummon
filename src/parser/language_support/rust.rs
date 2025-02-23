@@ -1,5 +1,4 @@
 use super::{LanguageParser, FunctionDefinition};
-use syn;
 use anyhow::Result;
 use std::path::Path;
 use tree_sitter::{Parser, Tree};
@@ -56,8 +55,10 @@ impl LanguageParser for RustParser {
         Ok(out)
     }
 
-    fn parse_functions_ast(&self, content: &str) -> Result<Vec<(String, syn::ItemFn)>> {
-        // For now we'll return empty vec since we're using tree-sitter instead of syn
+    fn parse_functions_ast(&mut self, content: &str) -> Result<Vec<(String, String)>> {
+        let tree = self.parser.parse(content, self.tree.as_ref())
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse code"))?;
+        self.tree = Some(tree);
         Ok(Vec::new())
     }
 }
