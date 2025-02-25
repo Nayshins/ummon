@@ -3,4 +3,4 @@ pub mod entity;
 pub mod relationship;
 
 // Re-export KnowledgeGraph for convenience
-pub use knowledge_graph::KnowledgeGraph;
+pub use crate::graph::knowledge_graph::KnowledgeGraph;

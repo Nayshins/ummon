@@ -36,23 +36,35 @@ cargo install ummon
 # Index a codebase
 ummon index /path/to/codebase
 
+# Index with domain model extraction enabled
+ummon index /path/to/codebase --enable-domain-extraction
+
+# Specify a custom domain directory for extraction
+ummon index /path/to/codebase --enable-domain-extraction --domain-dir models/
+
 # Query the knowledge graph
 ummon query "show all authentication functions"
 
-# Start the server
-ummon serve
+# Query with JSON output
+ummon query "show all authentication functions" --format json
 
 # Generate AI-assisted recommendations
 ummon assist "implement a user registration function"
+
+# Start the server
+ummon serve --port 8080 --host 0.0.0.0
+
+# Analyze impact of changes
+ummon analyze src/auth.rs --depth 5
 ```
 
 ## Configuration
 
-Ummon can be configured through environment variables:
+Ummon uses environment variables only for sensitive information:
 
-- `OPENROUTER_API_KEY`: API key for LLM services
-- `USE_LLM_MODEL_EXTRACTION`: Enable domain model extraction
-- `DOMAIN_EXTRACTION_DIR`: Directory to analyze for domain concepts
+- `OPENROUTER_API_KEY`: API key for LLM services (required for queries and domain extraction)
+
+All other configuration is handled through command-line flags.
 
 ## Architecture
 

@@ -154,3 +154,228 @@ impl RelationshipStore {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::graph::entity::EntityId;
+
+    #[test]
+    fn test_relationship_id_creation() {
+        let id = RelationshipId::new("test-rel");
+        assert_eq!(id.0, "test-rel");
+    }
+
+    #[test]
+    fn test_relationship_generate_id() {
+        let source = EntityId::new("source");
+        let target = EntityId::new("target");
+        let rel_type = RelationshipType::Calls;
+        
+        let id = Relationship::generate_id(&source, &target, &rel_type);
+        
+        assert_eq!(id.0, "source->target::Calls");
+    }
+
+    #[test]
+    fn test_relationship_creation() {
+        let source = EntityId::new("source");
+        let target = EntityId::new("target");
+        let rel_type = RelationshipType::Calls;
+        let id = RelationshipId::new("test-rel");
+        
+        let relationship = Relationship::new(
+            id.clone(),
+            source.clone(),
+            target.clone(),
+            rel_type.clone(),
+        );
+        
+        assert_eq!(relationship.id.0, id.0);
+        assert_eq!(relationship.source_id.0, source.0);
+        assert_eq!(relationship.target_id.0, target.0);
+        assert!(matches!(relationship.relationship_type, RelationshipType::Calls));
+        assert_eq!(relationship.weight, 1.0);
+        assert!(relationship.metadata.is_empty());
+    }
+
+    #[test]
+    fn test_relationship_store() {
+        let mut store = RelationshipStore::new();
+        
+        // Create relationships
+        let source1 = EntityId::new("source1");
+        let source2 = EntityId::new("source2");
+        let target = EntityId::new("target");
+        
+        let rel1 = Relationship::new(
+            RelationshipId::new("rel1"),
+            source1.clone(),
+            target.clone(),
+            RelationshipType::Calls,
+        );
+        
+        let rel2 = Relationship::new(
+            RelationshipId::new("rel2"),
+            source2.clone(),
+            target.clone(),
+            RelationshipType::Imports,
+        );
+        
+        // Add relationships to store
+        store.add_relationship(rel1);
+        store.add_relationship(rel2);
+        
+        // Test outgoing relationships
+        let outgoing1 = store.get_outgoing_relationships(&source1);
+        assert_eq!(outgoing1.len(), 1);
+        assert_eq!(outgoing1[0].id.0, "rel1");
+        assert!(matches!(outgoing1[0].relationship_type, RelationshipType::Calls));
+        
+        let outgoing2 = store.get_outgoing_relationships(&source2);
+        assert_eq!(outgoing2.len(), 1);
+        assert_eq!(outgoing2[0].id.0, "rel2");
+        assert!(matches!(outgoing2[0].relationship_type, RelationshipType::Imports));
+        
+        // Test incoming relationships
+        let incoming = store.get_incoming_relationships(&target);
+        assert_eq!(incoming.len(), 2);
+        
+        // Test non-existent relationships
+        let nonexistent = store.get_outgoing_relationships(&EntityId::new("nonexistent"));
+        assert_eq!(nonexistent.len(), 0);
+    }
+
+    #[test]
+    fn test_relationship_types() {
+        // Test that all relationship types can be properly created and used
+        let relationship_types = vec![
+            RelationshipType::Calls,
+            RelationshipType::Contains,
+            RelationshipType::Imports,
+            RelationshipType::Inherits,
+            RelationshipType::Implements, 
+            RelationshipType::References,
+            RelationshipType::Defines,
+            RelationshipType::Uses,
+            RelationshipType::Depends,
+            RelationshipType::RepresentedBy,
+            RelationshipType::RelatesTo,
+            RelationshipType::DependsOn,
+            RelationshipType::Other("CustomType".to_string()),
+        ];
+        
+        let mut store = RelationshipStore::new();
+        let source = EntityId::new("source");
+        let target = EntityId::new("target");
+        
+        // Create a relationship for each type
+        for (i, rel_type) in relationship_types.iter().enumerate() {
+            let id = RelationshipId::new(&format!("rel{}", i));
+            let rel = Relationship::new(
+                id,
+                source.clone(),
+                target.clone(),
+                rel_type.clone(),
+            );
+            
+            store.add_relationship(rel);
+        }
+        
+        // Verify all relationships were added
+        let outgoing = store.get_outgoing_relationships(&source);
+        assert_eq!(outgoing.len(), relationship_types.len());
+    }
+    
+    #[test]
+    fn test_relationship_metadata() {
+        let source = EntityId::new("source");
+        let target = EntityId::new("target");
+        let rel_type = RelationshipType::Calls;
+        let id = RelationshipId::new("test-rel");
+        
+        let mut relationship = Relationship::new(
+            id.clone(),
+            source.clone(),
+            target.clone(),
+            rel_type.clone(),
+        );
+        
+        // Add metadata
+        relationship.metadata.insert("key1".to_string(), "value1".to_string());
+        relationship.metadata.insert("key2".to_string(), "value2".to_string());
+        
+        // Test metadata
+        assert_eq!(relationship.metadata.len(), 2);
+        assert_eq!(relationship.metadata.get("key1"), Some(&"value1".to_string()));
+        assert_eq!(relationship.metadata.get("key2"), Some(&"value2".to_string()));
+    }
+    
+    #[test]
+    fn test_relationship_weight() {
+        let source = EntityId::new("source");
+        let target = EntityId::new("target");
+        let rel_type = RelationshipType::Calls;
+        let id = RelationshipId::new("test-rel");
+        
+        let mut relationship = Relationship::new(
+            id.clone(),
+            source.clone(),
+            target.clone(),
+            rel_type.clone(),
+        );
+        
+        // Default weight
+        assert_eq!(relationship.weight, 1.0);
+        
+        // Change weight
+        relationship.weight = 0.5;
+        assert_eq!(relationship.weight, 0.5);
+    }
+    
+    #[test]
+    fn test_relationship_store_empty() {
+        let store = RelationshipStore::new();
+        
+        // Test with empty store
+        let id = EntityId::new("test");
+        assert!(store.get_outgoing_relationships(&id).is_empty());
+        assert!(store.get_incoming_relationships(&id).is_empty());
+    }
+    
+    #[test]
+    fn test_relationship_store_multiple_relationships() {
+        let mut store = RelationshipStore::new();
+        
+        // Create multiple relationships between the same entities
+        let source = EntityId::new("source");
+        let target = EntityId::new("target");
+        
+        let rel1 = Relationship::new(
+            RelationshipId::new("rel1"),
+            source.clone(),
+            target.clone(),
+            RelationshipType::Calls,
+        );
+        
+        let rel2 = Relationship::new(
+            RelationshipId::new("rel2"),
+            source.clone(),
+            target.clone(),
+            RelationshipType::References,
+        );
+        
+        store.add_relationship(rel1);
+        store.add_relationship(rel2);
+        
+        // Test outgoing relationships - should have two different types
+        let outgoing = store.get_outgoing_relationships(&source);
+        assert_eq!(outgoing.len(), 2);
+        
+        let has_calls = outgoing.iter().any(|r| matches!(r.relationship_type, RelationshipType::Calls));
+        let has_refs = outgoing.iter().any(|r| matches!(r.relationship_type, RelationshipType::References));
+        
+        assert!(has_calls, "Should have a Calls relationship");
+        assert!(has_refs, "Should have a References relationship");
+    }
+}

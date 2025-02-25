@@ -1,4 +1,5 @@
 use crate::graph::KnowledgeGraph;
+use crate::graph::entity::EntityType;
 
 pub fn build_context(kg: &KnowledgeGraph, instruction: &str) -> String {
     let mut context = String::new();
@@ -6,9 +7,27 @@ pub fn build_context(kg: &KnowledgeGraph, instruction: &str) -> String {
     context.push_str(instruction);
     context.push_str("\n\nKnown Functions:\n");
 
-    for (_key, func) in kg.get_functions() {
+    // Get function entities directly from the entity model
+    let function_entities = kg.get_entities_by_type(&EntityType::Function);
+    for func in function_entities {
         context.push_str("- ");
-        context.push_str(&format!("{}::{}", func.file_path, func.name));
+        if let Some(file_path) = func.file_path() {
+            context.push_str(&format!("{}::{}", file_path, func.name()));
+        } else {
+            context.push_str(func.name());
+        }
+        context.push('\n');
+    }
+
+    // Also include method entities
+    let method_entities = kg.get_entities_by_type(&EntityType::Method);
+    for method in method_entities {
+        context.push_str("- ");
+        if let Some(file_path) = method.file_path() {
+            context.push_str(&format!("{}::{}", file_path, method.name()));
+        } else {
+            context.push_str(method.name());
+        }
         context.push('\n');
     }
 

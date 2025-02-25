@@ -15,7 +15,7 @@ use crate::parser::language_support::{
 use crate::parser::domain_model::RelationType;
 
 /// Main entry point for the indexing command
-pub async fn run(path: &str) -> Result<()> {
+pub async fn run(path: &str, enable_domain_extraction: bool, domain_dir: &str) -> Result<()> {
     println!("Indexing code at path: {}", path);
     let start_time = Instant::now();
 
@@ -37,7 +37,7 @@ pub async fn run(path: &str) -> Result<()> {
 
     // Third pass: Infer domain concepts and their relationships
     println!("Pass 3: Inferring domain model from all source files...");
-    infer_domain_model(&mut kg, &mut domain_concepts)?;
+    infer_domain_model(&mut kg, &mut domain_concepts, enable_domain_extraction, domain_dir)?;
 
     let duration = start_time.elapsed();
     kg.save_to_file("knowledge_graph.json")?;
@@ -112,9 +112,6 @@ fn index_entities(
             for func in functions {
                 let key = format!("{}::{}", func.file_path, func.name);
                 function_map.insert(key.clone(), func.clone());
-                
-                // Legacy support
-                kg.add_function(&func);
                 
                 // Create entity ID and entity type
                 let entity_id = EntityId::new(&key);
@@ -232,7 +229,7 @@ fn index_entities(
 fn index_relationships(
     path: &str,
     kg: &mut KnowledgeGraph,
-    function_map: &HashMap<String, FunctionDefinition>,
+    _function_map: &HashMap<String, FunctionDefinition>,
     type_map: &HashMap<String, TypeDefinition>,
     _domain_concepts: &HashMap<String, DomainConcept>,
     indexed_files: &HashSet<String>,
@@ -260,11 +257,6 @@ fn index_relationships(
             // Process calls between functions
             let calls = parser.parse_calls(&content)?;
             for call in calls {
-                // Legacy call processing
-                if let Some(caller) = function_map.get(&format!("{}::{}", file_path, call.callee_name)) {
-                    kg.add_call(caller, &call);
-                }
-                
                 // Add relationship between entities if they exist
                 // Create a more tolerant implementation that will try to make relationships even if exact IDs don't match
                 
@@ -341,8 +333,9 @@ fn index_relationships(
 fn infer_domain_model(
     kg: &mut KnowledgeGraph,
     domain_concepts: &mut HashMap<String, DomainConcept>,
+    enable_domain_extraction: bool,
+    domain_dir: &str,
 ) -> Result<()> {
-    use std::env;
     use crate::graph::entity::{DomainConceptEntity, EntityId, EntityType, BaseEntity};
     use crate::graph::relationship::RelationshipType;
     use crate::prompt::domain_extraction::LlmModelExtractor;
@@ -379,9 +372,8 @@ fn infer_domain_model(
     
     // Use LLM to extract domain entities from important files
     println!("Using LLM to extract domain models...");
-    let use_llm = env::var("USE_LLM_MODEL_EXTRACTION").unwrap_or_default() == "true";
     
-    if use_llm {
+    if enable_domain_extraction {
         use std::fs;
         use std::collections::HashSet;
         
@@ -392,9 +384,7 @@ fn infer_domain_model(
         let mut domain_entity_count = 0;
         
         // Process key model/entity files first - they likely contain domain entities
-        // We'll look at source directory files
-        // Get directory to analyze from environment variable or default to "src"
-        let domain_dir = std::env::var("DOMAIN_EXTRACTION_DIR").unwrap_or_else(|_| "src".to_string());
+        // We'll look at the specified domain directory
         println!("Analyzing directory for domain extraction: {}", domain_dir);
         
         // Process code in the specified directory, respecting .gitignore
@@ -524,7 +514,7 @@ fn infer_domain_model(
         
         println!("LLM domain extraction complete: {} entities found", domain_entity_count);
     } else {
-        println!("Skipping LLM-based domain extraction (set USE_LLM_MODEL_EXTRACTION=true to enable)");
+        println!("Skipping LLM-based domain extraction (use --enable-domain-extraction flag to enable)");
     }
     
     // Infer relationships between domain concepts

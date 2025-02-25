@@ -1,25 +1,26 @@
 use anyhow::Result;
-use petgraph::prelude::NodeIndex;
 use std::collections::HashMap;
 use tree_sitter::Node;
 
 use crate::graph::KnowledgeGraph;
+use crate::graph::entity::EntityId;
+use crate::graph::relationship::RelationshipType;
 
 #[allow(dead_code)]
 pub fn build_call_graph_for_fn(
     kg: &mut KnowledgeGraph,
-    caller_idx: NodeIndex,
+    caller_id: &EntityId,
     fn_node: Node,
     code: &str,
-    function_map: &HashMap<(String, String), NodeIndex>,
+    function_map: &HashMap<(String, String), EntityId>,
     file_path: &str,
 ) -> Result<()> {
     let mut calls = Vec::new();
     collect_calls(fn_node, code, &mut calls);
 
     for call_name in calls {
-        if let Some(&callee_idx) = function_map.get(&(file_path.to_string(), call_name.clone())) {
-            kg.add_edge(caller_idx, callee_idx);
+        if let Some(callee_id) = function_map.get(&(file_path.to_string(), call_name.clone())) {
+            kg.create_relationship(caller_id.clone(), callee_id.clone(), RelationshipType::Calls)?;
         }
     }
     Ok(())

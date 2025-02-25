@@ -23,8 +23,13 @@ async fn main() -> Result<()> {
     let cli = cli::Cli::parse();
 
     match cli.command {
-        cli::Commands::Index { path } => commands::index::run(&path).await?,
-        cli::Commands::Query { query } => commands::query::run(&query).await?,
+        cli::Commands::Index { 
+            path, 
+            enable_domain_extraction, 
+            domain_dir 
+        } => commands::index::run(&path, enable_domain_extraction, &domain_dir).await?,
+        cli::Commands::Query { query, format } => commands::query::run(&query, &format).await?,
+        cli::Commands::Assist { instruction } => commands::assist::run(&instruction)?,
         cli::Commands::Serve { port, host } => server::run_server(&host, port).await?,
         cli::Commands::Analyze { target, depth } => {
             let result = server::analysis::analyze_impact(&target, depth).await?;

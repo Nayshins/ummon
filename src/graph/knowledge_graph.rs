@@ -1,5 +1,4 @@
 use anyhow::Result;
-use petgraph::graph::{DiGraph, NodeIndex};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -8,8 +7,6 @@ use super::entity::{
     FunctionEntity, ModuleEntity, TypeEntity, VariableEntity,
 };
 use super::relationship::{Relationship, RelationshipStore, RelationshipType};
-
-use crate::parser::language_support::{CallReference, FunctionDefinition};
 
 /// Enhanced knowledge graph that stores entities and relationships
 #[derive(Debug, Serialize, Deserialize)]
@@ -23,14 +20,6 @@ pub struct KnowledgeGraph {
     
     // Serializable relationship data
     relationship_data: Vec<Relationship>,
-    
-    // Legacy storage for backwards compatibility
-    #[serde(skip)]
-    functions: HashMap<String, FunctionDefinition>,
-    #[serde(skip)]
-    #[allow(dead_code)]
-    call_graph: DiGraph<String, ()>,
-    call_edges: Vec<(String, String)>,
     
     // Domain concept storage
     domain_concepts: HashMap<String, DomainConceptEntity>,
@@ -87,9 +76,6 @@ impl KnowledgeGraph {
             entities: HashMap::new(),
             relationship_store: RelationshipStore::new(),
             relationship_data: Vec::new(),
-            functions: HashMap::new(),
-            call_graph: DiGraph::new(),
-            call_edges: Vec::new(),
             domain_concepts: HashMap::new(),
         }
     }
@@ -403,75 +389,7 @@ impl KnowledgeGraph {
         impact
     }
 
-    // Legacy methods for compatibility with existing code
-    
-    pub fn get_functions(&self) -> &HashMap<String, FunctionDefinition> {
-        &self.functions
-    }
-
-    pub fn add_function(&mut self, func: &FunctionDefinition) {
-        // Legacy function storage
-        let key = format!("{}::{}", func.file_path, func.name);
-        self.functions.insert(key.clone(), func.clone());
-        
-        // Convert to new entity model
-        // Use the same key format as in commands/index.rs
-        let entity_id = EntityId::new(&key);
-        let entity_type = match func.kind {
-            crate::parser::language_support::FunctionKind::Function => EntityType::Function,
-            crate::parser::language_support::FunctionKind::Method => EntityType::Method,
-            crate::parser::language_support::FunctionKind::Constructor => EntityType::Method,
-            _ => EntityType::Function,
-        };
-        
-        let base = BaseEntity::new(
-            entity_id.clone(),
-            func.name.clone(),
-            entity_type,
-            Some(func.file_path.clone()),
-        );
-        
-        let function_entity = FunctionEntity {
-            base,
-            parameters: func.parameters.clone(),
-            return_type: None, // Not in the legacy model
-            visibility: super::entity::Visibility::Default,
-            is_async: false,   // Not in the legacy model
-            is_static: false,  // Not in the legacy model
-            is_constructor: func.kind == crate::parser::language_support::FunctionKind::Constructor,
-            is_abstract: false, // Not in the legacy model
-        };
-        
-        // Ignore error since this is just compatibility code
-        let _ = self.add_entity(function_entity);
-    }
-
-    pub fn add_call(&mut self, caller: &FunctionDefinition, call: &CallReference) {
-        let caller_key = format!("{}::{}", caller.file_path, caller.name);
-        let callee_key = call
-            .fully_qualified_name
-            .clone()
-            .unwrap_or_else(|| call.callee_name.clone());
-
-        self.call_edges.push((caller_key.clone(), callee_key.clone()));
-        
-        // Convert to new relationship model
-        let source_id = EntityId::new(&caller_key);
-        let target_id = EntityId::new(&callee_key);
-        
-        // Only create the relationship if both entities exist
-        if self.entities.contains_key(&source_id) && self.entities.contains_key(&target_id) {
-            let _ = self.create_relationship(
-                source_id, 
-                target_id,
-                RelationshipType::Calls,
-            );
-        }
-    }
-    #[allow(dead_code)]
-    pub fn add_edge(&mut self, from: NodeIndex, to: NodeIndex) {
-        self.call_graph.add_edge(from, to, ());
-    }
+    // No more legacy methods
 
     pub fn save_to_file(&self, path: &str) -> Result<()> {
         let json = serde_json::to_string_pretty(&self)?;
@@ -488,71 +406,333 @@ impl KnowledgeGraph {
             graph.relationship_store.add_relationship(rel.clone());
         }
         
-        // Legacy support: Reconstruct the functions map
-        for (_id, storage) in &graph.entities {
-            if let EntityStorage::Function(func) = &**storage {
-                if let Some(file_path) = &func.base.file_path {
-                    let name = func.base.name.clone();
-                    
-                    // Create legacy function definition
-                    let function_def = FunctionDefinition {
-                        name: name.clone(),
-                        file_path: file_path.clone(),
-                        kind: match func.base.entity_type {
-                            EntityType::Method => {
-                                if func.is_constructor {
-                                    crate::parser::language_support::FunctionKind::Constructor
-                                } else {
-                                    crate::parser::language_support::FunctionKind::Method
-                                }
-                            },
-                            _ => crate::parser::language_support::FunctionKind::Function,
-                        },
-                        visibility: match func.visibility {
-                            super::entity::Visibility::Public => crate::parser::language_support::Visibility::Public,
-                            super::entity::Visibility::Private => crate::parser::language_support::Visibility::Private,
-                            super::entity::Visibility::Protected => crate::parser::language_support::Visibility::Protected,
-                            super::entity::Visibility::Package => crate::parser::language_support::Visibility::Default,
-                            super::entity::Visibility::Internal => crate::parser::language_support::Visibility::Default,
-                            super::entity::Visibility::Default => crate::parser::language_support::Visibility::Default,
-                        },
-                        location: crate::parser::language_support::Location {
-                            start: match &func.base.location {
-                                Some(loc) => crate::parser::language_support::Position {
-                                    line: loc.start.line,
-                                    column: loc.start.column,
-                                    offset: loc.start.offset,
-                                },
-                                None => crate::parser::language_support::Position {
-                                    line: 0,
-                                    column: 0,
-                                    offset: 0,
-                                },
-                            },
-                            end: match &func.base.location {
-                                Some(loc) => crate::parser::language_support::Position {
-                                    line: loc.end.line,
-                                    column: loc.end.column,
-                                    offset: loc.end.offset,
-                                },
-                                None => crate::parser::language_support::Position {
-                                    line: 0,
-                                    column: 0,
-                                    offset: 0,
-                                },
-                            },
-                        },
-                        containing_type: func.base.containing_entity.as_ref().map(|id| id.as_str().to_string()),
-                        parameters: func.parameters.clone(),
-                    };
-                    
-                    let key = format!("{}::{}", file_path, name);
-                    graph.functions.insert(key, function_def);
-                }
-            }
-        }
-        
         Ok(graph)
     }
+}
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::graph::entity::{EntityId, BaseEntity, EntityType, FunctionEntity, DomainConceptEntity, Visibility};
+    use crate::graph::relationship::{Relationship, RelationshipType};
+
+    #[test]
+    fn test_new_knowledge_graph() {
+        let kg = KnowledgeGraph::new();
+        assert_eq!(kg.entities.len(), 0);
+        assert_eq!(kg.get_relationship_count(), 0);
+        assert!(kg.get_domain_concepts().is_empty());
+    }
+
+    #[test]
+    fn test_add_entity() {
+        let mut kg = KnowledgeGraph::new();
+        
+        // Create a simple function entity
+        let id = EntityId::new("test::function");
+        let base = BaseEntity::new(
+            id.clone(),
+            "testFunction".to_string(),
+            EntityType::Function,
+            Some("test.rs".to_string()),
+        );
+        
+        let function = FunctionEntity {
+            base,
+            parameters: vec![],
+            return_type: None,
+            visibility: Visibility::Public,
+            is_async: false,
+            is_static: false,
+            is_constructor: false,
+            is_abstract: false,
+        };
+        
+        // Add the entity
+        let result = kg.add_entity(function);
+        assert!(result.is_ok());
+        
+        // Verify it was added
+        assert_eq!(kg.entities.len(), 1);
+        
+        // Get the entity
+        let entity = kg.get_entity(&id);
+        assert!(entity.is_some());
+        
+        let entity = entity.unwrap();
+        assert_eq!(entity.name(), "testFunction");
+        assert!(matches!(entity.entity_type(), EntityType::Function));
+        assert_eq!(entity.file_path().unwrap(), "test.rs");
+    }
+    
+    #[test]
+    fn test_add_relationship() {
+        let mut kg = KnowledgeGraph::new();
+        
+        // Create two entities
+        let id1 = EntityId::new("function1");
+        let base1 = BaseEntity::new(
+            id1.clone(),
+            "function1".to_string(),
+            EntityType::Function,
+            Some("test.rs".to_string()),
+        );
+        
+        let function1 = FunctionEntity {
+            base: base1,
+            parameters: vec![],
+            return_type: None,
+            visibility: Visibility::Public,
+            is_async: false,
+            is_static: false,
+            is_constructor: false,
+            is_abstract: false,
+        };
+        
+        let id2 = EntityId::new("function2");
+        let base2 = BaseEntity::new(
+            id2.clone(),
+            "function2".to_string(),
+            EntityType::Function,
+            Some("test.rs".to_string()),
+        );
+        
+        let function2 = FunctionEntity {
+            base: base2,
+            parameters: vec![],
+            return_type: None,
+            visibility: Visibility::Public,
+            is_async: false,
+            is_static: false,
+            is_constructor: false,
+            is_abstract: false,
+        };
+        
+        // Add entities
+        kg.add_entity(function1).unwrap();
+        kg.add_entity(function2).unwrap();
+        
+        // Create and add relationship
+        let rel_id = Relationship::generate_id(&id1, &id2, &RelationshipType::Calls);
+        let relationship = Relationship::new(rel_id, id1.clone(), id2.clone(), RelationshipType::Calls);
+        
+        kg.add_relationship(relationship);
+        
+        // Verify relationship
+        assert_eq!(kg.get_relationship_count(), 1);
+        
+        // Check outgoing relationships
+        let outgoing = kg.get_outgoing_relationships(&id1);
+        assert_eq!(outgoing.len(), 1);
+        assert!(matches!(outgoing[0].relationship_type, RelationshipType::Calls));
+        assert_eq!(outgoing[0].target_id.as_str(), id2.as_str());
+        
+        // Check incoming relationships
+        let incoming = kg.get_incoming_relationships(&id2);
+        assert_eq!(incoming.len(), 1);
+        assert!(matches!(incoming[0].relationship_type, RelationshipType::Calls));
+        assert_eq!(incoming[0].source_id.as_str(), id1.as_str());
+    }
+    
+    #[test]
+    fn test_get_entities_by_type() {
+        let mut kg = KnowledgeGraph::new();
+        
+        // Add a function entity
+        let id1 = EntityId::new("function1");
+        let base1 = BaseEntity::new(
+            id1.clone(),
+            "function1".to_string(),
+            EntityType::Function,
+            Some("test.rs".to_string()),
+        );
+        
+        let function = FunctionEntity {
+            base: base1,
+            parameters: vec![],
+            return_type: None,
+            visibility: Visibility::Public,
+            is_async: false,
+            is_static: false,
+            is_constructor: false,
+            is_abstract: false,
+        };
+        
+        // Add a domain concept entity
+        let id2 = EntityId::new("concept1");
+        let base2 = BaseEntity::new(
+            id2.clone(),
+            "User".to_string(),
+            EntityType::DomainConcept,
+            None,
+        );
+        
+        let concept = DomainConceptEntity {
+            base: base2,
+            attributes: vec!["username".to_string()],
+            description: Some("A user in the system".to_string()),
+            confidence: 0.9,
+        };
+        
+        // Add entities
+        kg.add_entity(function).unwrap();
+        kg.add_entity(concept).unwrap();
+        
+        // Get entities by type
+        let functions = kg.get_entities_by_type(&EntityType::Function);
+        assert_eq!(functions.len(), 1);
+        assert_eq!(functions[0].name(), "function1");
+        
+        let concepts = kg.get_entities_by_type(&EntityType::DomainConcept);
+        assert_eq!(concepts.len(), 1);
+        assert_eq!(concepts[0].name(), "User");
+        
+        let methods = kg.get_entities_by_type(&EntityType::Method);
+        assert_eq!(methods.len(), 0);
+    }
+    
+    #[test]
+    fn test_find_paths() {
+        let mut kg = KnowledgeGraph::new();
+        
+        // Create three entities in a chain: A -> B -> C
+        let id_a = EntityId::new("A");
+        let base_a = BaseEntity::new(
+            id_a.clone(),
+            "A".to_string(),
+            EntityType::Function,
+            Some("test.rs".to_string()),
+        );
+        
+        let function_a = FunctionEntity {
+            base: base_a,
+            parameters: vec![],
+            return_type: None,
+            visibility: Visibility::Public,
+            is_async: false,
+            is_static: false,
+            is_constructor: false,
+            is_abstract: false,
+        };
+        
+        let id_b = EntityId::new("B");
+        let base_b = BaseEntity::new(
+            id_b.clone(),
+            "B".to_string(),
+            EntityType::Function,
+            Some("test.rs".to_string()),
+        );
+        
+        let function_b = FunctionEntity {
+            base: base_b,
+            parameters: vec![],
+            return_type: None,
+            visibility: Visibility::Public,
+            is_async: false,
+            is_static: false,
+            is_constructor: false,
+            is_abstract: false,
+        };
+        
+        let id_c = EntityId::new("C");
+        let base_c = BaseEntity::new(
+            id_c.clone(),
+            "C".to_string(),
+            EntityType::Function,
+            Some("test.rs".to_string()),
+        );
+        
+        let function_c = FunctionEntity {
+            base: base_c,
+            parameters: vec![],
+            return_type: None,
+            visibility: Visibility::Public,
+            is_async: false,
+            is_static: false,
+            is_constructor: false,
+            is_abstract: false,
+        };
+        
+        // Add entities
+        kg.add_entity(function_a).unwrap();
+        kg.add_entity(function_b).unwrap();
+        kg.add_entity(function_c).unwrap();
+        
+        // Create relationships A -> B and B -> C
+        kg.create_relationship(id_a.clone(), id_b.clone(), RelationshipType::Calls).unwrap();
+        kg.create_relationship(id_b.clone(), id_c.clone(), RelationshipType::Calls).unwrap();
+        
+        // Find path from A to C
+        let paths = kg.find_paths(&id_a, &id_c, 3);
+        assert_eq!(paths.len(), 1);
+        assert_eq!(paths[0].len(), 3);
+        assert_eq!(paths[0][0].name(), "A");
+        assert_eq!(paths[0][1].name(), "B");
+        assert_eq!(paths[0][2].name(), "C");
+        
+        // Try with insufficient depth
+        let paths = kg.find_paths(&id_a, &id_c, 1);
+        assert_eq!(paths.len(), 0);
+        
+        // Direct path shouldn't exist
+        assert!(kg.get_outgoing_relationships(&id_a).iter().all(|r| r.target_id != id_c));
+    }
+    
+    #[test]
+    fn test_domain_concepts() {
+        let mut kg = KnowledgeGraph::new();
+        
+        // Create a domain concept
+        let id = EntityId::new("user");
+        let base = BaseEntity::new(
+            id.clone(),
+            "User".to_string(),
+            EntityType::DomainConcept,
+            None,
+        );
+        
+        let concept = DomainConceptEntity {
+            base,
+            attributes: vec!["username".to_string(), "email".to_string()],
+            description: Some("A user in the system".to_string()),
+            confidence: 0.9,
+        };
+        
+        // Add the entity
+        kg.add_entity(concept).unwrap();
+        
+        // Verify domain concepts
+        let concepts = kg.get_domain_concepts();
+        assert_eq!(concepts.len(), 1);
+        assert_eq!(concepts[0].name(), "User");
+        assert_eq!(concepts[0].attributes.len(), 2);
+        
+        // Create a related code entity
+        let code_id = EntityId::new("user_class");
+        let code_base = BaseEntity::new(
+            code_id.clone(),
+            "UserClass".to_string(),
+            EntityType::Class,
+            Some("user.rs".to_string()),
+        );
+        
+        let code_entity = TypeEntity {
+            base: code_base,
+            fields: vec![],
+            methods: vec![],
+            supertypes: vec![],
+            visibility: Visibility::Public,
+            is_abstract: false,
+        };
+        
+        kg.add_entity(code_entity).unwrap();
+        
+        // Create relationship between domain concept and code
+        kg.create_relationship(id.clone(), code_id.clone(), RelationshipType::RepresentedBy).unwrap();
+        
+        // Check related entities
+        let related = kg.get_related_entities(&id, Some(&RelationshipType::RepresentedBy));
+        assert_eq!(related.len(), 1);
+        assert_eq!(related[0].name(), "UserClass");
+    }
 }
