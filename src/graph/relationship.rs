@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 
 use super::entity::EntityId;
 
@@ -13,9 +13,6 @@ impl RelationshipId {
         RelationshipId(id.to_string())
     }
     
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
 }
 
 /// Relationship type enumeration
@@ -134,9 +131,6 @@ impl RelationshipStore {
     }
     
     /// Get a relationship by ID
-    pub fn get_relationship(&self, id: &RelationshipId) -> Option<&Relationship> {
-        self.relationships.get(id)
-    }
     
     /// Get all outgoing relationships from an entity
     pub fn get_outgoing_relationships(&self, entity_id: &EntityId) -> Vec<&Relationship> {
@@ -158,61 +152,5 @@ impl RelationshipStore {
                 .collect(),
             None => Vec::new(),
         }
-    }
-    
-    /// Get all relationships of a specific type
-    pub fn get_relationships_by_type(&self, rel_type: &RelationshipType) -> Vec<&Relationship> {
-        match self.relationship_types.get(rel_type) {
-            Some(rel_ids) => rel_ids
-                .iter()
-                .filter_map(|id| self.relationships.get(id))
-                .collect(),
-            None => Vec::new(),
-        }
-    }
-    
-    /// Get relationships by source, target, and optional type
-    pub fn get_relationships_between(
-        &self,
-        source_id: &EntityId,
-        target_id: &EntityId,
-        rel_type: Option<&RelationshipType>,
-    ) -> Vec<&Relationship> {
-        let outgoing = match self.outgoing_relationships.get(source_id) {
-            Some(rel_ids) => rel_ids,
-            None => return Vec::new(),
-        };
-        
-        outgoing
-            .iter()
-            .filter_map(|id| self.relationships.get(id))
-            .filter(|rel| {
-                rel.target_id == *target_id
-                    && match rel_type {
-                        Some(rt) => &rel.relationship_type == rt,
-                        None => true,
-                    }
-            })
-            .collect()
-    }
-    
-    /// Check if a relationship exists between two entities
-    pub fn has_relationship_between(
-        &self,
-        source_id: &EntityId,
-        target_id: &EntityId,
-        rel_type: Option<&RelationshipType>,
-    ) -> bool {
-        !self.get_relationships_between(source_id, target_id, rel_type).is_empty()
-    }
-    
-    /// Get all relationships
-    pub fn get_all_relationships(&self) -> Vec<&Relationship> {
-        self.relationships.values().collect()
-    }
-    
-    /// Count the number of relationships
-    pub fn relationship_count(&self) -> usize {
-        self.relationships.len()
     }
 }

@@ -25,6 +25,7 @@ impl RustParser {
         }
     }
 
+    #[allow(dead_code)]
     fn parse_functions(
         &mut self,
         content: &str,

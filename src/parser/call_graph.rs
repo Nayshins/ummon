@@ -5,6 +5,7 @@ use tree_sitter::Node;
 
 use crate::graph::KnowledgeGraph;
 
+#[allow(dead_code)]
 pub fn build_call_graph_for_fn(
     kg: &mut KnowledgeGraph,
     caller_idx: NodeIndex,
@@ -24,6 +25,7 @@ pub fn build_call_graph_for_fn(
     Ok(())
 }
 
+#[allow(dead_code)]
 fn collect_calls(node: Node, code: &str, calls: &mut Vec<String>) {
     match node.kind() {
         "call_expression" => {
@@ -47,6 +49,7 @@ fn collect_calls(node: Node, code: &str, calls: &mut Vec<String>) {
     }
 }
 
+#[allow(dead_code)]
 fn extract_identifier(node: Node, code: &str) -> String {
     if node.child_count() == 0 {
         return code[node.start_byte()..node.end_byte()].to_string();
@@ -60,3 +63,4 @@ fn extract_identifier(node: Node, code: &str) -> String {
     }
     code[node.start_byte()..node.end_byte()].to_string()
 }
+

@@ -28,6 +28,7 @@ pub struct KnowledgeGraph {
     #[serde(skip)]
     functions: HashMap<String, FunctionDefinition>,
     #[serde(skip)]
+    #[allow(dead_code)]
     call_graph: DiGraph<String, ()>,
     call_edges: Vec<(String, String)>,
     
@@ -56,6 +57,27 @@ impl EntityStorage {
             EntityStorage::DomainConcept(d) => d,
             EntityStorage::Base(b) => b,
         }
+    }
+}
+
+/// Helper function to downcast a trait object to a concrete type
+fn downcast_entity<T: 'static + Clone>(entity: impl Entity + 'static) -> Option<T> {
+    // First check if we can directly convert using type_id
+    if let Some(concrete) = ((&entity) as &dyn std::any::Any).downcast_ref::<T>() {
+        return Some(concrete.clone());
+    }
+    
+    // If direct conversion fails, try the more complex approach
+    let boxed: Box<dyn Entity + 'static> = Box::new(entity);
+    
+    // Convert to Any using transmute 
+    let boxed_any: Box<dyn std::any::Any> = unsafe {
+        std::mem::transmute(boxed)
+    };
+    
+    match boxed_any.downcast::<T>() {
+        Ok(boxed) => Some(*boxed),
+        Err(_) => None,
     }
 }
 
@@ -138,22 +160,6 @@ impl KnowledgeGraph {
     pub fn get_all_entities(&self) -> Vec<&dyn Entity> {
         self.entities.values().map(|e| e.as_entity()).collect()
     }
-    
-    /// Check if an entity exists by ID
-    pub fn has_entity(&self, id: &EntityId) -> bool {
-        self.entities.contains_key(id)
-    }
-    
-    /// Get the number of entities
-    pub fn get_entity_count(&self) -> usize {
-        self.entities.len()
-    }
-    
-    /// Get all entity IDs for debugging
-    pub fn get_all_entity_ids(&self) -> Vec<&EntityId> {
-        self.entities.keys().collect()
-    }
-    
     /// Get entities by type
     pub fn get_entities_by_type(&self, entity_type: &EntityType) -> Vec<&dyn Entity> {
         self.entities
@@ -317,6 +323,7 @@ impl KnowledgeGraph {
     }
     
     /// Find entities related to a domain concept
+    #[allow(dead_code)]
     pub fn get_entities_for_domain_concept(&self, concept_name: &str) -> Vec<&dyn Entity> {
         if let Some(concept) = self.domain_concepts.get(concept_name) {
             self.get_related_entities(concept.id(), Some(&RelationshipType::RepresentedBy))
@@ -324,7 +331,6 @@ impl KnowledgeGraph {
             Vec::new()
         }
     }
-    
     /// Find domain concepts for a code entity
     pub fn get_domain_concepts_for_entity(&self, entity_id: &EntityId) -> Vec<&DomainConceptEntity> {
         self.get_dependent_entities(entity_id, Some(&RelationshipType::RepresentedBy))
@@ -462,7 +468,7 @@ impl KnowledgeGraph {
             );
         }
     }
-
+    #[allow(dead_code)]
     pub fn add_edge(&mut self, from: NodeIndex, to: NodeIndex) {
         self.call_graph.add_edge(from, to, ());
     }
@@ -483,7 +489,7 @@ impl KnowledgeGraph {
         }
         
         // Legacy support: Reconstruct the functions map
-        for (id, storage) in &graph.entities {
+        for (_id, storage) in &graph.entities {
             if let EntityStorage::Function(func) = &**storage {
                 if let Some(file_path) = &func.base.file_path {
                     let name = func.base.name.clone();
@@ -549,68 +555,4 @@ impl KnowledgeGraph {
         Ok(graph)
     }
 
-    pub fn get_function(&self, file_path: &str, name: &str) -> Option<&FunctionDefinition> {
-        self.functions.get(&format!("{}::{}", file_path, name))
-    }
-
-    pub fn get_callers(&self, func: &FunctionDefinition) -> Vec<&FunctionDefinition> {
-        let key = format!("{}::{}", func.file_path, func.name);
-        self.call_edges
-            .iter()
-            .filter(|(_, callee)| callee == &key)
-            .filter_map(|(caller, _)| self.functions.get(caller))
-            .collect()
-    }
-
-    pub fn get_callees(&self, func: &FunctionDefinition) -> Vec<&FunctionDefinition> {
-        let key = format!("{}::{}", func.file_path, func.name);
-        self.call_edges
-            .iter()
-            .filter(|(caller, _)| caller == &key)
-            .filter_map(|(_, callee)| self.functions.get(callee))
-            .collect()
-    }
 }
-
-/// Helper function to downcast a trait object to a concrete type
-fn downcast_entity<T: 'static + Clone>(entity: impl Entity + 'static) -> Option<T> {
-    // First check if we can directly convert using type_id
-    if let Some(concrete) = ((&entity) as &dyn std::any::Any).downcast_ref::<T>() {
-        return Some(concrete.clone());
-    }
-    
-    // If direct conversion fails, try the more complex approach
-    let boxed: Box<dyn Entity + 'static> = Box::new(entity);
-    
-    // Convert to Any using transmute 
-    let boxed_any: Box<dyn std::any::Any> = unsafe {
-        std::mem::transmute(boxed)
-    };
-    
-    match boxed_any.downcast::<T>() {
-        Ok(boxed) => Some(*boxed),
-        Err(_) => None,
-    }
-}
-
-// Visibility conversion functions (commented out since they're no longer needed)
-// impl From<&crate::parser::language_support::Visibility> for super::entity::Visibility {
-//     fn from(vis: &crate::parser::language_support::Visibility) -> Self {
-//         match vis {
-//             crate::parser::language_support::Visibility::Public => super::entity::Visibility::Public,
-//             crate::parser::language_support::Visibility::Private => super::entity::Visibility::Private,
-//             crate::parser::language_support::Visibility::Protected => super::entity::Visibility::Protected,
-//             crate::parser::language_support::Visibility::Default => super::entity::Visibility::Default,
-//         }
-//     }
-// }
-
-// Helper function for converting from owned value (commented out since it's no longer needed)
-// pub fn visibility_from(vis: crate::parser::language_support::Visibility) -> super::entity::Visibility {
-//     match vis {
-//         crate::parser::language_support::Visibility::Public => super::entity::Visibility::Public,
-//         crate::parser::language_support::Visibility::Private => super::entity::Visibility::Private,
-//         crate::parser::language_support::Visibility::Protected => super::entity::Visibility::Protected,
-//         crate::parser::language_support::Visibility::Default => super::entity::Visibility::Default,
-//     }
-// }

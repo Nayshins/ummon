@@ -234,7 +234,7 @@ fn index_relationships(
     kg: &mut KnowledgeGraph,
     function_map: &HashMap<String, FunctionDefinition>,
     type_map: &HashMap<String, TypeDefinition>,
-    domain_concepts: &HashMap<String, DomainConcept>,
+    _domain_concepts: &HashMap<String, DomainConcept>,
     indexed_files: &HashSet<String>,
 ) -> Result<()> {
     let walker = WalkBuilder::new(path).hidden(false).ignore(true).build();

@@ -4,7 +4,6 @@ use std::env;
 use crate::parser::domain_model::{
     AttributeType, DomainEntity, DomainModelBuilder, EntityType,
 };
-use crate::prompt::llm_integration::query_llm;
 
 /// Domain model builder that uses an LLM to extract domain entities
 pub struct LlmModelExtractor {
@@ -26,17 +25,6 @@ impl LlmModelExtractor {
             }
         };
         Self { api_key }
-    }
-
-    async fn extract_domain_model_async(&self, content: &str, file_path: &str) -> Result<Vec<DomainEntity>> {
-        // Create a prompt for the LLM
-        let prompt = build_domain_extraction_prompt(content, file_path);
-        
-        // Call the LLM
-        let response = query_llm(&prompt, &self.api_key).await?;
-        
-        // Parse the response
-        parse_domain_entities_from_llm_response(&response)
     }
 }
 
@@ -83,7 +71,7 @@ impl DomainModelBuilder for LlmModelExtractor {
         };
         
         // Create a prompt for the LLM
-        let prompt = build_domain_extraction_prompt(&truncated_content, file_path);
+        let _prompt = build_domain_extraction_prompt(&truncated_content, file_path);
         
         // For this synchronous context, we'll just use a mock response
         // In a real implementation, we would need to refactor the main command to be fully async
@@ -159,8 +147,3 @@ Only provide the JSON with no other text."#,
     )
 }
 
-/// Parse the LLM's response into domain entities
-fn parse_domain_entities_from_llm_response(response: &str) -> Result<Vec<DomainEntity>> {
-    use crate::parser::domain_model::parse_domain_entities_from_llm_response as parse_entities;
-    parse_entities(response)
-}

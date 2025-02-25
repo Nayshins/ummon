@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 
 /// Position in a source file
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -77,6 +77,7 @@ pub trait Entity {
     fn entity_type(&self) -> EntityType;
     fn location(&self) -> Option<&Location>;
     fn metadata(&self) -> &HashMap<String, String>;
+    #[allow(dead_code)]
     fn metadata_mut(&mut self) -> &mut HashMap<String, String>;
 }
 
@@ -133,7 +134,7 @@ impl Entity for BaseEntity {
     fn metadata(&self) -> &HashMap<String, String> {
         &self.metadata
     }
-
+    
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.metadata
     }
@@ -172,7 +173,7 @@ impl Entity for FunctionEntity {
     fn metadata(&self) -> &HashMap<String, String> {
         &self.base.metadata
     }
-
+    
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.base.metadata
     }
@@ -209,7 +210,7 @@ impl Entity for TypeEntity {
     fn metadata(&self) -> &HashMap<String, String> {
         &self.base.metadata
     }
-
+    
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.base.metadata
     }
@@ -244,7 +245,7 @@ impl Entity for ModuleEntity {
     fn metadata(&self) -> &HashMap<String, String> {
         &self.base.metadata
     }
-
+    
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.base.metadata
     }
@@ -280,7 +281,7 @@ impl Entity for VariableEntity {
     fn metadata(&self) -> &HashMap<String, String> {
         &self.base.metadata
     }
-
+    
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.base.metadata
     }
@@ -315,11 +316,13 @@ impl Entity for DomainConceptEntity {
     fn metadata(&self) -> &HashMap<String, String> {
         &self.base.metadata
     }
-
+    
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.base.metadata
     }
 }
 
 /// A boxed entity type for storing heterogeneous entities
+#[allow(dead_code)]
 pub type BoxedEntity = Box<dyn Entity + Send + Sync>;
+

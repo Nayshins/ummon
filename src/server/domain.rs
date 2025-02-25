@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+#[allow(unused_imports)]
 use std::collections::HashMap;
 use tracing::info;
 
@@ -14,6 +15,7 @@ pub struct DomainCodeMapping {
     /// Entities that represent this concept
     pub entities: Vec<EntityMapping>,
     /// Related domain concepts
+    #[allow(dead_code)]
     pub related_concepts: Vec<String>,
 }
 
@@ -21,6 +23,7 @@ pub struct DomainCodeMapping {
 #[derive(Debug, Clone)]
 pub struct EntityMapping {
     /// Entity ID
+    #[allow(dead_code)]
     pub id: String,
     /// Entity name
     pub name: String,
@@ -29,6 +32,7 @@ pub struct EntityMapping {
     /// Importance/relevance score (0.0 to 1.0)
     pub relevance: f32,
     /// File path if available
+    #[allow(dead_code)]
     pub file_path: Option<String>,
 }
 
@@ -156,47 +160,3 @@ fn get_all_related_domain_concepts<'a>(kg: &'a KnowledgeGraph, entity_id: &Entit
     concepts
 }
 
-/// Get detailed information about a domain concept
-pub async fn get_domain_concept_details(
-    kg: &KnowledgeGraph, 
-    concept_name: &str
-) -> Result<HashMap<String, serde_json::Value>> {
-    let mut details = HashMap::new();
-    
-    // Find the domain concept
-    let domain_concepts = kg.get_domain_concepts();
-    let concept = domain_concepts
-        .iter()
-        .find(|c| c.name().to_lowercase() == concept_name.to_lowercase())
-        .ok_or_else(|| anyhow!("Domain concept '{}' not found", concept_name))?;
-    
-    // Basic information
-    details.insert("name".to_string(), serde_json::json!(concept.name()));
-    details.insert("description".to_string(), serde_json::json!(concept.description.clone().unwrap_or_default()));
-    details.insert("confidence".to_string(), serde_json::json!(concept.confidence));
-    details.insert("attributes".to_string(), serde_json::json!(concept.attributes));
-    
-    // Related concepts
-    let related_concepts: Vec<String> = kg
-        .get_related_entities(concept.id(), Some(&RelationshipType::RelatesTo))
-        .iter()
-        .filter_map(|e| {
-            if let EntityType::DomainConcept = e.entity_type() {
-                Some(e.name().to_string())
-            } else {
-                None
-            }
-        })
-        .collect();
-    details.insert("related_concepts".to_string(), serde_json::json!(related_concepts));
-    
-    // Implementation entities
-    let implementations: Vec<String> = kg
-        .get_related_entities(concept.id(), Some(&RelationshipType::RepresentedBy))
-        .iter()
-        .map(|e| format!("{} ({})", e.name(), format!("{:?}", e.entity_type())))
-        .collect();
-    details.insert("implementations".to_string(), serde_json::json!(implementations));
-    
-    Ok(details)
-}

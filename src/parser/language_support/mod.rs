@@ -123,8 +123,8 @@ pub trait LanguageParser: Send {
     // New methods for parsing additional entity types
     fn parse_types(
         &mut self,
-        content: &str,
-        file_path: &str,
+        _content: &str,
+        _file_path: &str,
     ) -> Result<Vec<TypeDefinition>> {
         // Default implementation returns empty list
         Ok(Vec::new())
@@ -132,7 +132,7 @@ pub trait LanguageParser: Send {
     
     fn parse_modules(
         &mut self,
-        content: &str,
+        _content: &str,
         file_path: &str,
     ) -> Result<ModuleDefinition> {
         // Default implementation returns basic module info
@@ -151,95 +151,38 @@ pub trait LanguageParser: Send {
         })
     }
     
-    fn parse_fields(
-        &mut self,
-        content: &str,
-        type_name: &str,
-    ) -> Result<Vec<FieldDefinition>> {
-        // Default implementation returns empty list
-        Ok(Vec::new())
-    }
-    
-    // Domain concept inference
-    fn extract_documentation(
-        &mut self,
-        content: &str,
-        location: &Location,
-    ) -> Result<Option<String>> {
-        // Default implementation returns no documentation
-        Ok(None)
-    }
-    
     fn infer_domain_concepts(
         &mut self,
-        content: &str,
-        file_path: &str,
+        _content: &str,
+        _file_path: &str,
     ) -> Result<Vec<DomainConcept>> {
         // Default implementation returns empty list
         Ok(Vec::new())
     }
     
-    fn analyze_naming_patterns(
-        &mut self,
-        entity_name: &str,
-    ) -> Result<Vec<String>> {
-        // Default implementation extracts words from camel/snake case
-        let mut words = Vec::new();
-        let mut current_word = String::new();
-        
-        let name = entity_name.replace('_', " ");
-        
-        for (i, c) in name.chars().enumerate() {
-            if i > 0 && c.is_uppercase() {
-                // Start of a new word in camelCase or PascalCase
-                if !current_word.is_empty() {
-                    words.push(current_word.to_lowercase());
-                }
-                current_word = String::new();
-            }
-            
-            if c.is_whitespace() {
-                // End of a word with space separation
-                if !current_word.is_empty() {
-                    words.push(current_word.to_lowercase());
-                }
-                current_word = String::new();
-            } else {
-                current_word.push(c);
-            }
-        }
-        
-        // Add the last word
-        if !current_word.is_empty() {
-            words.push(current_word.to_lowercase());
-        }
-        
-        Ok(words)
+    // Extract documentation comments
+    fn extract_documentation(
+        &self,
+        _content: &str,
+        _location: &Location,
+    ) -> Result<Option<String>> {
+        // Default implementation returns None
+        Ok(None)
     }
     
-    // Cloning support
+    // Clone method for boxed trait objects
     fn clone_box(&self) -> Box<dyn LanguageParser + Send>;
 }
 
 /// Reference to a function/method call site
 #[derive(Debug, Clone)]
 pub struct CallReference {
-    pub caller_location: Location,
     pub callee_name: String,
     pub fully_qualified_name: Option<String>,
+    #[allow(dead_code)]
+    pub caller_location: Location,
+    #[allow(dead_code)]
     pub arguments: Vec<String>,
-}
-
-/// Create a new call reference with default values
-impl CallReference {
-    pub fn new(caller_location: Location, callee_name: String) -> Self {
-        Self {
-            caller_location,
-            callee_name,
-            fully_qualified_name: None,
-            arguments: Vec::new(),
-        }
-    }
 }
 
 /// Get the appropriate parser for a given file

@@ -6,6 +6,7 @@ use crate::graph::entity::{Entity, EntityType};
 use crate::graph::KnowledgeGraph;
 
 /// Find entities by a search pattern
+#[allow(dead_code)]
 pub fn find_entities_by_pattern<'a>(
     kg: &'a KnowledgeGraph,
     pattern: &str,
@@ -47,6 +48,7 @@ pub fn find_entities_by_pattern<'a>(
 }
 
 /// Extract a file name from a path
+#[allow(dead_code)]
 pub fn extract_file_name(path: &str) -> String {
     Path::new(path)
         .file_name()
@@ -56,6 +58,7 @@ pub fn extract_file_name(path: &str) -> String {
 }
 
 /// Extract a module name from a file path
+#[allow(dead_code)]
 pub fn extract_module_name(path: &str) -> String {
     let file_name = extract_file_name(path);
     
@@ -66,50 +69,8 @@ pub fn extract_module_name(path: &str) -> String {
         .to_string()
 }
 
-/// Get code statistics for a file
-pub fn get_file_statistics(kg: &KnowledgeGraph, file_path: &str) -> HashMap<String, usize> {
-    let mut stats = HashMap::new();
-    
-    // Count entities by type
-    let mut functions = 0;
-    let mut methods = 0;
-    let mut classes = 0;
-    let mut interfaces = 0;
-    let mut traits = 0;
-    let mut structs = 0;
-    let mut variables = 0;
-    
-    for entity in kg.get_all_entities() {
-        let entity_file_path = entity.metadata().get("file_path").or_else(|| entity.metadata().get("path"));
-        
-        if let Some(path) = entity_file_path {
-            if path == file_path {
-                match entity.entity_type() {
-                    EntityType::Function => functions += 1,
-                    EntityType::Method => methods += 1,
-                    EntityType::Class => classes += 1,
-                    EntityType::Interface => interfaces += 1,
-                    EntityType::Trait => traits += 1,
-                    EntityType::Struct => structs += 1,
-                    EntityType::Variable | EntityType::Field | EntityType::Constant => variables += 1,
-                    _ => {}
-                }
-            }
-        }
-    }
-    
-    stats.insert("functions".to_string(), functions);
-    stats.insert("methods".to_string(), methods);
-    stats.insert("classes".to_string(), classes);
-    stats.insert("interfaces".to_string(), interfaces);
-    stats.insert("traits".to_string(), traits);
-    stats.insert("structs".to_string(), structs);
-    stats.insert("variables".to_string(), variables);
-    
-    stats
-}
-
 /// Get a list of resource paths for MCP
+#[allow(dead_code)]
 pub fn get_mcp_resources(
     kg: &KnowledgeGraph,
     resource_type: &str,
@@ -185,6 +146,7 @@ pub fn get_mcp_resources(
 }
 
 /// Format entity data for API response
+#[allow(dead_code)]
 pub fn format_entity_for_response(entity: &dyn Entity) -> HashMap<String, serde_json::Value> {
     let mut data = HashMap::new();
     

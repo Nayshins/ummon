@@ -6,8 +6,10 @@ use crate::graph::entity::Location;
 /// Base JSON-RPC 2.0 request
 #[derive(Debug, Deserialize)]
 pub struct JsonRpcRequest<T> {
+    #[allow(dead_code)]
     pub jsonrpc: String,
     pub id: Option<serde_json::Value>,
+    #[allow(dead_code)]
     pub method: String,
     pub params: Option<T>,
 }
@@ -40,6 +42,7 @@ pub struct JsonRpcError {
 #[derive(Debug, Deserialize)]
 pub struct InitializeParams {
     pub client_info: ClientInfo,
+    #[allow(dead_code)]
     pub capabilities: ClientCapabilities,
 }
 
@@ -47,13 +50,16 @@ pub struct InitializeParams {
 #[derive(Debug, Deserialize)]
 pub struct ClientInfo {
     pub name: String,
+    #[allow(dead_code)]
     pub version: Option<String>,
 }
 
 /// MCP client capabilities
 #[derive(Debug, Deserialize)]
 pub struct ClientCapabilities {
+    #[allow(dead_code)]
     pub prompts: Option<PromptClientCapabilities>,
+    #[allow(dead_code)]
     pub resources: Option<ResourceClientCapabilities>,
 }
 
@@ -61,14 +67,16 @@ pub struct ClientCapabilities {
 #[derive(Debug, Deserialize)]
 pub struct PromptClientCapabilities {
     #[serde(default)]
-    pub dynamicRegistration: bool,
+    #[allow(dead_code)]
+    pub dynamic_registration: bool,
 }
 
 /// MCP resource client capabilities
 #[derive(Debug, Deserialize)]
 pub struct ResourceClientCapabilities {
     #[serde(default)]
-    pub dynamicRegistration: bool,
+    #[allow(dead_code)]
+    pub dynamic_registration: bool,
 }
 
 /// MCP initialization result
@@ -160,6 +168,7 @@ pub enum PromptContent {
     #[serde(rename = "text")]
     Text { text: String },
     #[serde(rename = "resource")]
+    #[allow(dead_code)]
     Resource { resource: ResourceContent },
 }
 
