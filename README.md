@@ -88,4 +88,4 @@ cargo fmt
 
 ## License
 
-[MIT License](LICENSE)
+[APACHE License](LICENSE)
