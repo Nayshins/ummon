@@ -1,6 +1,10 @@
 # Ummon
 
+> **⚠️ WARNING: This project is in early development and is not yet stable. APIs and functionality may change significantly between versions.**
+
 Ummon is a code analysis tool that builds knowledge graphs from codebases to enhance understanding, improve AI assistance, and enable sophisticated querying. It creates connections between code entities (functions, classes, modules) and domain concepts, making it easier to reason about complex software systems.
+
+Named after the AI Ummon from Dan Simmons' Hyperion Cantos, this project provides deep insights into codebases that help both humans and AI assistants better understand software systems.
 
 ## Core Features
 
