@@ -23,11 +23,6 @@ Named after the AI Ummon from Dan Simmons' Hyperion Cantos, this project provide
    - Maps domain concepts to implementation details
    - Creates a bridge between technical and business understanding
 
-4. **Impact Analysis**
-   - Assess how changes might affect other parts of the codebase
-   - Identify ripple effects before making changes
-   - Reduce the risk of unexpected regressions
-
 ## Installation and Setup
 
 ```
@@ -54,12 +49,6 @@ ummon query "show all authentication functions" --format json
 
 # Generate AI-assisted recommendations
 ummon assist "implement a user registration function"
-
-# Start the server
-ummon serve --port 8080 --host 0.0.0.0
-
-# Analyze impact of changes
-ummon analyze src/auth.rs --depth 5
 ```
 
 ## Configuration
@@ -77,7 +66,6 @@ Ummon is built with a modular architecture:
 - Graph-based storage for entities and relationships
 - LLM integration for semantic understanding
 - Command-line interface for user interaction
-- Server component for API access
 
 ## Development
 

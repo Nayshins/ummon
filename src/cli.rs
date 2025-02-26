@@ -40,37 +40,4 @@ pub enum Commands {
         /// User instruction (e.g., "implement a user registration function")
         instruction: String,
     },
-    
-    /// Start the API server
-    Serve {
-        /// Port number to listen on
-        #[arg(long, default_value = "3000")]
-        port: u16,
-        
-        /// Host address to bind to
-        #[arg(long, default_value = "127.0.0.1")]
-        host: String,
-    },
-    
-    /// Analyze the impact of changing a specific file or component
-    Analyze {
-        /// Target file or component to analyze (e.g., "src/auth/login.rs")
-        target: String,
-        
-        /// Maximum depth for impact analysis
-        #[arg(long, default_value = "3")]
-        depth: usize,
-    },
-    
-    /// Map a domain concept to code implementations
-    MapDomain {
-        /// Domain concept to map (e.g., "Authentication")
-        concept: String,
-    },
-    
-    /// Map code to domain concepts
-    MapCode {
-        /// Path to the code file to map
-        path: String,
-    },
 }
