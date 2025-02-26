@@ -49,6 +49,33 @@ ummon query "show all authentication functions" --format json
 
 # Generate AI-assisted recommendations
 ummon assist "implement a user registration function"
+
+# Start an MCP server (Model Context Protocol) for AI agent interaction
+ummon serve                      # Use stdin/stdout (default)
+ummon serve --transport http     # Use HTTP server (requires feature flag)
+```
+
+## MCP Server
+
+Ummon includes a Model Context Protocol (MCP) server that allows AI agents to interact with codebase knowledge graphs. The server provides these capabilities:
+
+### Available Tools:
+
+- `search_code`: Search for code entities using a natural language query
+- `get_entity`: Get detailed information about a specific entity
+
+### Available Resources:
+
+- `knowledge_graph.json`: The full knowledge graph in JSON format
+
+### Example MCP Usage:
+
+```bash
+# Start MCP server with stdin/stdout transport (works with MCP Inspector)
+ummon serve
+
+# Connect to the server using MCP Inspector
+npx @modelcontextprotocol/inspector ummon serve
 ```
 
 ## Configuration
@@ -66,6 +93,7 @@ Ummon is built with a modular architecture:
 - Graph-based storage for entities and relationships
 - LLM integration for semantic understanding
 - Command-line interface for user interaction
+- MCP server for AI agent integration
 
 ## Development
 

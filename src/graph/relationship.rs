@@ -38,6 +38,26 @@ pub enum RelationshipType {
     Other(String),         // Custom relationship type
 }
 
+impl std::fmt::Display for RelationshipType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RelationshipType::Calls => write!(f, "Calls"),
+            RelationshipType::Contains => write!(f, "Contains"),
+            RelationshipType::Imports => write!(f, "Imports"),
+            RelationshipType::Inherits => write!(f, "Inherits"),
+            RelationshipType::Implements => write!(f, "Implements"),
+            RelationshipType::References => write!(f, "References"),
+            RelationshipType::Defines => write!(f, "Defines"),
+            RelationshipType::Uses => write!(f, "Uses"),
+            RelationshipType::Depends => write!(f, "Depends"),
+            RelationshipType::RepresentedBy => write!(f, "RepresentedBy"),
+            RelationshipType::RelatesTo => write!(f, "RelatesTo"),
+            RelationshipType::DependsOn => write!(f, "DependsOn"),
+            RelationshipType::Other(s) => write!(f, "Other({})", s),
+        }
+    }
+}
+
 /// Relationship between entities in the knowledge graph
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Relationship {

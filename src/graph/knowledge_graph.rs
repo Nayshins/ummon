@@ -207,6 +207,7 @@ impl KnowledgeGraph {
     }
     
     /// Get related entities (incoming)
+    #[allow(dead_code)]
     pub fn get_dependent_entities(&self, target_id: &EntityId, rel_type: Option<&RelationshipType>) -> Vec<&dyn Entity> {
         let relationships = self.relationship_store.get_incoming_relationships(target_id);
         
@@ -318,6 +319,7 @@ impl KnowledgeGraph {
         }
     }
     /// Find domain concepts for a code entity
+    #[allow(dead_code)]
     pub fn get_domain_concepts_for_entity(&self, entity_id: &EntityId) -> Vec<&DomainConceptEntity> {
         self.get_dependent_entities(entity_id, Some(&RelationshipType::RepresentedBy))
             .into_iter()
@@ -333,6 +335,7 @@ impl KnowledgeGraph {
     }
     
     /// Calculate impact of a change to an entity
+    #[allow(dead_code)]
     pub fn calculate_impact(&self, entity_id: &EntityId, max_depth: usize) -> HashMap<EntityId, f32> {
         let mut impact = HashMap::new();
         let mut queue = Vec::new();
@@ -389,7 +392,15 @@ impl KnowledgeGraph {
         impact
     }
 
-    // No more legacy methods
+    // File operations
+    #[allow(dead_code)]
+    pub fn save(&self) -> Result<()> {
+        self.save_to_file("knowledge_graph.json")
+    }
+
+    pub fn load() -> Result<Self> {
+        Self::load_from_file("knowledge_graph.json")
+    }
 
     pub fn save_to_file(&self, path: &str) -> Result<()> {
         let json = serde_json::to_string_pretty(&self)?;
@@ -407,6 +418,142 @@ impl KnowledgeGraph {
         }
         
         Ok(graph)
+    }
+
+    // Search functionality for MCP server
+    pub fn search(&self, query: &str) -> Result<Vec<&dyn Entity>> {
+        // Convert query to lowercase for case-insensitive matching
+        let query = query.to_lowercase();
+        
+        // Split query into tokens for more flexible matching
+        let query_tokens: Vec<&str> = query
+            .split_whitespace()
+            .filter(|token| !token.is_empty())
+            .collect();
+            
+        if query_tokens.is_empty() {
+            // Return empty results for empty query
+            return Ok(Vec::new());
+        }
+        
+        // Prepare results collection
+        let mut results = Vec::new();
+        let mut scores = HashMap::new();
+        
+        // Scan all entities and compute match scores
+        for entity_storage in self.entities.values() {
+            let entity = entity_storage.as_entity();
+            let mut score = 0.0;
+            
+            // 1. Check for exact matches on the entity name
+            let name = entity.name().to_lowercase();
+            if name == query {
+                score += 10.0; // Exact match is heavily weighted
+            } else if name.contains(&query) {
+                score += 5.0;  // Full query contained within name is good
+            }
+            
+            // 2. Check for token matches
+            let mut token_matches = 0;
+            for token in &query_tokens {
+                if name.contains(token) {
+                    token_matches += 1;
+                }
+                
+                // Check in file path
+                if let Some(path) = entity.path() {
+                    if path.to_lowercase().contains(token) {
+                        token_matches += 1;
+                    }
+                }
+                
+                // Check in entity type string
+                if entity.entity_type().to_string().to_lowercase().contains(token) {
+                    token_matches += 1;
+                }
+                
+                // Check in metadata
+                for (_, value) in entity.metadata().iter() {
+                    if value.to_lowercase().contains(token) {
+                        token_matches += 1;
+                        break;
+                    }
+                }
+            }
+            
+            // Calculate token match score
+            if token_matches > 0 {
+                score += (token_matches as f32 / query_tokens.len() as f32) * 3.0;
+            }
+            
+            // 3. Entity type specific boosts
+            match entity.entity_type() {
+                EntityType::Function | EntityType::Method => {
+                    if query.contains("function") || query.contains("method") || query.contains("call") {
+                        score += 2.0;
+                    }
+                },
+                EntityType::Class | EntityType::Struct | EntityType::Type => {
+                    if query.contains("class") || query.contains("type") || query.contains("struct") {
+                        score += 2.0;
+                    }
+                },
+                EntityType::Module | EntityType::File => {
+                    if query.contains("module") || query.contains("file") {
+                        score += 2.0;
+                    }
+                },
+                EntityType::DomainConcept => {
+                    if query.contains("domain") || query.contains("concept") || query.contains("business") {
+                        score += 2.0;
+                    }
+                },
+                _ => {}
+            }
+            
+            // If we have any score, add to results
+            if score > 0.0 {
+                results.push(entity);
+                scores.insert(entity.id().as_str(), score);
+            }
+        }
+        
+        // Sort results by score
+        results.sort_by(|a, b| {
+            let a_score = scores.get(a.id().as_str()).unwrap_or(&0.0);
+            let b_score = scores.get(b.id().as_str()).unwrap_or(&0.0);
+            
+            // Sort by score (descending)
+            b_score.partial_cmp(a_score).unwrap_or(std::cmp::Ordering::Equal)
+        });
+        
+        // Limit to 20 most relevant results
+        if results.len() > 20 {
+            results.truncate(20);
+        }
+        
+        Ok(results)
+    }
+
+    // Helper method to get all relationships for an entity
+    pub fn get_relationships_for_entity(&self, entity_id: &str) -> Result<Vec<Relationship>> {
+        let entity_id = EntityId::new(entity_id);
+        
+        let outgoing = self.get_outgoing_relationships(&entity_id);
+        let incoming = self.get_incoming_relationships(&entity_id);
+        
+        let mut relationships = Vec::new();
+        
+        // Clone the relationships since we need to return owned values
+        for rel in outgoing {
+            relationships.push(rel.clone());
+        }
+        
+        for rel in incoming {
+            relationships.push(rel.clone());
+        }
+        
+        Ok(relationships)
     }
 }
 

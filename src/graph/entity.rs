@@ -50,6 +50,12 @@ impl EntityId {
     }
 }
 
+impl std::fmt::Display for EntityId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// Entity type enumeration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum EntityType {
@@ -70,14 +76,43 @@ pub enum EntityType {
     Other(String),
 }
 
+impl std::fmt::Display for EntityType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EntityType::Function => write!(f, "Function"),
+            EntityType::Method => write!(f, "Method"),
+            EntityType::Class => write!(f, "Class"),
+            EntityType::Interface => write!(f, "Interface"),
+            EntityType::Trait => write!(f, "Trait"),
+            EntityType::Struct => write!(f, "Struct"),
+            EntityType::Enum => write!(f, "Enum"),
+            EntityType::Module => write!(f, "Module"),
+            EntityType::File => write!(f, "File"),
+            EntityType::Variable => write!(f, "Variable"),
+            EntityType::Field => write!(f, "Field"),
+            EntityType::Constant => write!(f, "Constant"),
+            EntityType::DomainConcept => write!(f, "DomainConcept"),
+            EntityType::Type => write!(f, "Type"),
+            EntityType::Other(s) => write!(f, "Other({})", s),
+        }
+    }
+}
+
 /// Base trait for all graph entities
 pub trait Entity {
     fn id(&self) -> &EntityId;
     fn name(&self) -> &str;
     fn entity_type(&self) -> EntityType;
+    #[allow(dead_code)]
     fn location(&self) -> Option<&Location>;
     fn file_path(&self) -> Option<&String>;
+    #[allow(dead_code)]
     fn metadata(&self) -> &HashMap<String, String>;
+    
+    // Helper methods for MCP server
+    fn path(&self) -> Option<&str> {
+        self.file_path().map(|s| s.as_str())
+    }
     #[allow(dead_code)]
     fn metadata_mut(&mut self) -> &mut HashMap<String, String>;
 }
