@@ -110,38 +110,30 @@ static LANGUAGE_PARSERS: Lazy<Mutex<Vec<Box<dyn LanguageParser + Send>>>> = Lazy
 pub trait LanguageParser: Send {
     // Basic file identification
     fn can_handle(&self, file_path: &Path) -> bool;
-    
+
     // Core parsing methods (original API preserved for compatibility)
     fn parse_functions(
         &mut self,
         content: &str,
         file_path: &str,
     ) -> Result<Vec<FunctionDefinition>>;
-    
+
     fn parse_calls(&mut self, content: &str) -> Result<Vec<CallReference>>;
-    
+
     // New methods for parsing additional entity types
-    fn parse_types(
-        &mut self,
-        _content: &str,
-        _file_path: &str,
-    ) -> Result<Vec<TypeDefinition>> {
+    fn parse_types(&mut self, _content: &str, _file_path: &str) -> Result<Vec<TypeDefinition>> {
         // Default implementation returns empty list
         Ok(Vec::new())
     }
-    
-    fn parse_modules(
-        &mut self,
-        _content: &str,
-        file_path: &str,
-    ) -> Result<ModuleDefinition> {
+
+    fn parse_modules(&mut self, _content: &str, file_path: &str) -> Result<ModuleDefinition> {
         // Default implementation returns basic module info
         let filename = Path::new(file_path)
             .file_name()
             .and_then(|name| name.to_str())
             .unwrap_or("unknown")
             .to_string();
-            
+
         Ok(ModuleDefinition {
             name: filename,
             path: file_path.to_string(),
@@ -150,7 +142,7 @@ pub trait LanguageParser: Send {
             documentation: None,
         })
     }
-    
+
     fn infer_domain_concepts(
         &mut self,
         _content: &str,
@@ -159,7 +151,7 @@ pub trait LanguageParser: Send {
         // Default implementation returns empty list
         Ok(Vec::new())
     }
-    
+
     // Extract documentation comments
     fn extract_documentation(
         &self,
@@ -169,7 +161,7 @@ pub trait LanguageParser: Send {
         // Default implementation returns None
         Ok(None)
     }
-    
+
     // Clone method for boxed trait objects
     fn clone_box(&self) -> Box<dyn LanguageParser + Send>;
 }

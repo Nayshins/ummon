@@ -15,12 +15,10 @@ pub fn run(instruction: &str) -> Result<()> {
 
     // Call the LLM using OpenRouter API key for consistency
     let api_key = std::env::var("OPENROUTER_API_KEY").unwrap_or_default();
-    
+
     // Convert to async block to handle the async query_llm
     let rt = tokio::runtime::Runtime::new()?;
-    let response = rt.block_on(async {
-        query_llm(&context, &api_key).await
-    })?;
+    let response = rt.block_on(async { query_llm(&context, &api_key).await })?;
 
     println!("LLM suggests:\n{}", response);
 

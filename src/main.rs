@@ -24,10 +24,10 @@ async fn main() -> Result<()> {
     let cli = cli::Cli::parse();
 
     match cli.command {
-        cli::Commands::Index { 
-            path, 
-            enable_domain_extraction, 
-            domain_dir 
+        cli::Commands::Index {
+            path,
+            enable_domain_extraction,
+            domain_dir,
         } => commands::index::run(&path, enable_domain_extraction, &domain_dir).await?,
         cli::Commands::Query { query, format } => commands::query::run(&query, &format).await?,
         cli::Commands::Assist { instruction } => commands::assist::run(&instruction)?,

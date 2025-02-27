@@ -17,15 +17,16 @@ pub async fn query_llm(prompt: &str, api_key: &str) -> Result<String> {
                 },
                 "relationships": []
             }
-        ]"#.to_string());
+        ]"#
+        .to_string());
     }
-    
+
     println!("  Sending LLM request for domain extraction...");
 
     let client = Client::builder()
         .timeout(Duration::from_secs(120))
         .build()?;
-        
+
     let body = serde_json::json!({
         "model": "anthropic/claude-3-opus-20240229",
         "messages": [
@@ -38,16 +39,20 @@ pub async fn query_llm(prompt: &str, api_key: &str) -> Result<String> {
 
     let max_retries = 3;
     let mut attempt = 0;
-    
+
     loop {
         attempt += 1;
         println!("  LLM API call attempt {}/{}", attempt, max_retries);
-        
+
         match try_llm_query(&client, api_key, &body).await {
             Ok(result) => return Ok(result),
             Err(e) => {
                 if attempt >= max_retries {
-                    return Err(anyhow::anyhow!("Failed after {} attempts: {}", max_retries, e));
+                    return Err(anyhow::anyhow!(
+                        "Failed after {} attempts: {}",
+                        max_retries,
+                        e
+                    ));
                 }
                 // Exponential backoff
                 let backoff = Duration::from_millis(500 * 2u64.pow(attempt as u32 - 1));
@@ -71,7 +76,10 @@ async fn try_llm_query(client: &Client, api_key: &str, body: &Value) -> Result<S
     // Check for HTTP errors
     if !res.status().is_success() {
         let status = res.status();
-        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        let error_text = res
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
         return Err(anyhow::anyhow!("HTTP error {}: {}", status, error_text));
     }
 

@@ -24,7 +24,7 @@ pub async fn run(instruction: &str, format: &str) -> Result<()> {
                 Ok(json) => println!("{}", serde_json::to_string_pretty(&json)?),
                 Err(_) => println!("{}", response), // Fallback to plain text if not valid JSON
             }
-        },
+        }
         _ => println!("{}", response), // Default to plain text
     }
 

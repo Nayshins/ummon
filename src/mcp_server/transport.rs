@@ -1,12 +1,10 @@
 use async_trait::async_trait;
-use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt, AsyncBufReadExt};
-use tokio::io::BufReader;
-use tokio::sync::Mutex;
 use std::sync::Arc;
+use tokio::io::BufReader;
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt};
+use tokio::sync::Mutex;
 
-use crate::mcp_core::{
-    TransportError, JsonRpcRequest, JsonRpcResponse,
-};
+use crate::mcp_core::{JsonRpcRequest, JsonRpcResponse, TransportError};
 
 /// Transport trait for handling JSON-RPC communication
 #[async_trait]
@@ -45,9 +43,10 @@ where
 {
     async fn read_request(&mut self) -> Result<JsonRpcRequest, TransportError> {
         let mut line = String::new();
-        self.reader.read_line(&mut line).await.map_err(|e| {
-            TransportError::IoError(e)
-        })?;
+        self.reader
+            .read_line(&mut line)
+            .await
+            .map_err(|e| TransportError::IoError(e))?;
 
         if line.is_empty() {
             return Err(TransportError::IoError(std::io::Error::new(
@@ -56,9 +55,8 @@ where
             )));
         }
 
-        let request: JsonRpcRequest = serde_json::from_str(&line).map_err(|e| {
-            TransportError::ParseError(e.to_string())
-        })?;
+        let request: JsonRpcRequest =
+            serde_json::from_str(&line).map_err(|e| TransportError::ParseError(e.to_string()))?;
 
         // Validate JSON-RPC version
         if request.jsonrpc != "2.0" {
@@ -76,15 +74,18 @@ where
         })?;
 
         let mut writer = self.writer.lock().await;
-        writer.write_all(json.as_bytes()).await.map_err(|e| {
-            TransportError::IoError(e)
-        })?;
-        writer.write_all(b"\n").await.map_err(|e| {
-            TransportError::IoError(e)
-        })?;
-        writer.flush().await.map_err(|e| {
-            TransportError::IoError(e)
-        })?;
+        writer
+            .write_all(json.as_bytes())
+            .await
+            .map_err(|e| TransportError::IoError(e))?;
+        writer
+            .write_all(b"\n")
+            .await
+            .map_err(|e| TransportError::IoError(e))?;
+        writer
+            .flush()
+            .await
+            .map_err(|e| TransportError::IoError(e))?;
 
         Ok(())
     }

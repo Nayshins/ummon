@@ -1,5 +1,5 @@
-pub mod knowledge_graph;
 pub mod entity;
+pub mod knowledge_graph;
 pub mod relationship;
 
 // Re-export KnowledgeGraph for convenience

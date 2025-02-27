@@ -1,5 +1,5 @@
-use crate::graph::KnowledgeGraph;
 use crate::graph::entity::EntityType;
+use crate::graph::KnowledgeGraph;
 
 pub fn build_context(kg: &KnowledgeGraph, instruction: &str) -> String {
     let mut context = String::new();

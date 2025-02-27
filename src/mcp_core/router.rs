@@ -3,9 +3,7 @@ use serde_json::Value;
 use std::future::Future;
 use std::pin::Pin;
 
-use crate::mcp_core::{
-    Content, Resource, ResourceError, ServerCapabilities, Tool, ToolError,
-};
+use crate::mcp_core::{Content, Resource, ResourceError, ServerCapabilities, Tool, ToolError};
 
 /// Router trait defines the interface for handling MCP requests
 #[async_trait]

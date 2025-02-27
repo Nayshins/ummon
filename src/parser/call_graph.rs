@@ -2,9 +2,9 @@ use anyhow::Result;
 use std::collections::HashMap;
 use tree_sitter::Node;
 
-use crate::graph::KnowledgeGraph;
 use crate::graph::entity::EntityId;
 use crate::graph::relationship::RelationshipType;
+use crate::graph::KnowledgeGraph;
 
 #[allow(dead_code)]
 pub fn build_call_graph_for_fn(
@@ -20,7 +20,11 @@ pub fn build_call_graph_for_fn(
 
     for call_name in calls {
         if let Some(callee_id) = function_map.get(&(file_path.to_string(), call_name.clone())) {
-            kg.create_relationship(caller_id.clone(), callee_id.clone(), RelationshipType::Calls)?;
+            kg.create_relationship(
+                caller_id.clone(),
+                callee_id.clone(),
+                RelationshipType::Calls,
+            )?;
         }
     }
     Ok(())
@@ -64,4 +68,3 @@ fn extract_identifier(node: Node, code: &str) -> String {
     }
     code[node.start_byte()..node.end_byte()].to_string()
 }
-

@@ -1,7 +1,7 @@
 pub mod errors;
-pub mod types;
 pub mod router;
+pub mod types;
 
 pub use errors::*;
-pub use types::*;
 pub use router::*;
+pub use types::*;

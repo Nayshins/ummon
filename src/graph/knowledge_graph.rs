@@ -329,7 +329,7 @@ impl KnowledgeGraph {
     pub fn get_relationship_count(&self) -> usize {
         self.relationship_data.len()
     }
-    
+
     /// Get all relationships
     pub fn get_all_relationships(&self) -> Result<Vec<Relationship>> {
         // Simply return a clone of all the relationship data
@@ -947,11 +947,11 @@ mod tests {
         assert_eq!(related.len(), 1);
         assert_eq!(related[0].name(), "UserClass");
     }
-    
+
     #[test]
     fn test_add_entity_duplicate() {
         let mut kg = KnowledgeGraph::new();
-        
+
         // Create a function entity
         let id = EntityId::new("test::func");
         let base = BaseEntity::new(
@@ -960,7 +960,7 @@ mod tests {
             EntityType::Function,
             Some("test.rs".to_string()),
         );
-        
+
         let function1 = FunctionEntity {
             base,
             parameters: vec![],
@@ -971,10 +971,10 @@ mod tests {
             is_constructor: false,
             is_abstract: false,
         };
-        
+
         // Add entity to graph
         kg.add_entity(function1).unwrap();
-        
+
         // Create a duplicate entity with the same ID
         let base2 = BaseEntity::new(
             id.clone(),
@@ -982,7 +982,7 @@ mod tests {
             EntityType::Function,
             Some("test.rs".to_string()),
         );
-        
+
         let function2 = FunctionEntity {
             base: base2,
             parameters: vec![],
@@ -993,10 +993,10 @@ mod tests {
             is_constructor: false,
             is_abstract: false,
         };
-        
+
         // Adding a duplicate should replace the original
         kg.add_entity(function2).unwrap();
-        
+
         // Verify only one entity exists with updated name
         assert_eq!(kg.entities.len(), 1);
         assert_eq!(kg.get_entity(&id).unwrap().name(), "duplicateFunc");
@@ -1005,7 +1005,7 @@ mod tests {
     #[test]
     fn test_add_relationship_with_nonexistent_entity() {
         let mut kg = KnowledgeGraph::new();
-        
+
         // Create one entity
         let id_a = EntityId::new("A");
         let base_a = BaseEntity::new(
@@ -1014,7 +1014,7 @@ mod tests {
             EntityType::Function,
             Some("test.rs".to_string()),
         );
-        
+
         let function_a = FunctionEntity {
             base: base_a,
             parameters: vec![],
@@ -1025,20 +1025,24 @@ mod tests {
             is_constructor: false,
             is_abstract: false,
         };
-        
+
         // Add entity to graph
         kg.add_entity(function_a).unwrap();
-        
+
         // Try to create relationship with non-existent entity
         let id_nonexistent = EntityId::new("NonExistent");
-        
-        // Based on the implementation, the current create_relationship implementation 
+
+        // Based on the implementation, the current create_relationship implementation
         // doesn't validate if the target entity exists, it just creates the relationship
-        let result = kg.create_relationship(id_a.clone(), id_nonexistent.clone(), RelationshipType::Calls);
-        
+        let result = kg.create_relationship(
+            id_a.clone(),
+            id_nonexistent.clone(),
+            RelationshipType::Calls,
+        );
+
         // Should succeed (current implementation doesn't validate entity existence)
         assert!(result.is_ok());
-        
+
         // But the related entities should be empty because the target doesn't exist
         let related = kg.get_related_entities(&id_a, Some(&RelationshipType::Calls));
         assert_eq!(related.len(), 0);
@@ -1047,7 +1051,7 @@ mod tests {
     #[test]
     fn test_add_bidirectional_relationship() {
         let mut kg = KnowledgeGraph::new();
-        
+
         // Create two function entities
         let id_a = EntityId::new("A");
         let base_a = BaseEntity::new(
@@ -1056,7 +1060,7 @@ mod tests {
             EntityType::Function,
             Some("test.rs".to_string()),
         );
-        
+
         let function_a = FunctionEntity {
             base: base_a,
             parameters: vec![],
@@ -1067,7 +1071,7 @@ mod tests {
             is_constructor: false,
             is_abstract: false,
         };
-        
+
         let id_b = EntityId::new("B");
         let base_b = BaseEntity::new(
             id_b.clone(),
@@ -1075,7 +1079,7 @@ mod tests {
             EntityType::Function,
             Some("test.rs".to_string()),
         );
-        
+
         let function_b = FunctionEntity {
             base: base_b,
             parameters: vec![],
@@ -1086,40 +1090,40 @@ mod tests {
             is_constructor: false,
             is_abstract: false,
         };
-        
+
         // Add entities to graph
         kg.add_entity(function_a).unwrap();
         kg.add_entity(function_b).unwrap();
-        
+
         // Create relationships in both directions
         kg.create_relationship(id_a.clone(), id_b.clone(), RelationshipType::Calls)
             .unwrap();
         kg.create_relationship(id_b.clone(), id_a.clone(), RelationshipType::Calls)
             .unwrap();
-        
+
         // Verify relationships were created
         let outgoing_a = kg.get_outgoing_relationships(&id_a);
         assert_eq!(outgoing_a.len(), 1);
         assert_eq!(outgoing_a[0].target_id.0, "B");
-        
+
         let outgoing_b = kg.get_outgoing_relationships(&id_b);
         assert_eq!(outgoing_b.len(), 1);
         assert_eq!(outgoing_b[0].target_id.0, "A");
     }
-    
+
     #[test]
     fn test_get_entities_with_multiple_filters() {
         let mut kg = KnowledgeGraph::new();
-        
+
         // Create multiple entities with differing file_paths
         let func1_id = EntityId::new("func1");
         let base_func1 = BaseEntity::new(
-            func1_id.clone(), 
+            func1_id.clone(),
             "testFunc1".to_string(),
             EntityType::Function,
             Some("file1.rs".to_string()),
         );
-        
+
         let function1 = FunctionEntity {
             base: base_func1,
             parameters: vec![],
@@ -1130,15 +1134,15 @@ mod tests {
             is_constructor: false,
             is_abstract: false,
         };
-        
+
         let func2_id = EntityId::new("func2");
         let base_func2 = BaseEntity::new(
-            func2_id.clone(), 
+            func2_id.clone(),
             "testFunc2".to_string(),
             EntityType::Function,
             Some("file2.rs".to_string()),
         );
-        
+
         let function2 = FunctionEntity {
             base: base_func2,
             parameters: vec![],
@@ -1149,7 +1153,7 @@ mod tests {
             is_constructor: false,
             is_abstract: false,
         };
-        
+
         let class_id = EntityId::new("class");
         let base_class = BaseEntity::new(
             class_id.clone(),
@@ -1157,7 +1161,7 @@ mod tests {
             EntityType::Class,
             Some("file1.rs".to_string()),
         );
-        
+
         let class = TypeEntity {
             base: base_class,
             fields: vec![],
@@ -1166,18 +1170,20 @@ mod tests {
             visibility: Visibility::Public,
             is_abstract: false,
         };
-        
+
         // Add entities to graph
         kg.add_entity(function1).unwrap();
         kg.add_entity(function2).unwrap();
         kg.add_entity(class).unwrap();
-        
+
         // Test getting all functions
         let all_functions = kg.get_entities_by_type(&EntityType::Function);
         assert_eq!(all_functions.len(), 2);
-        
+
         // Test getting all entities from file1.rs
-        let entities_from_file1: Vec<&dyn Entity> = kg.entities.values()
+        let entities_from_file1: Vec<&dyn Entity> = kg
+            .entities
+            .values()
             .filter(|e| {
                 if let Some(path) = e.as_entity().file_path() {
                     path == "file1.rs"
@@ -1187,28 +1193,26 @@ mod tests {
             })
             .map(|e| e.as_entity())
             .collect();
-        
+
         assert_eq!(entities_from_file1.len(), 2);
-        
+
         // Verify entity names are as expected
-        let entity_names: Vec<&str> = entities_from_file1.iter()
-            .map(|e| e.name())
-            .collect();
-        
+        let entity_names: Vec<&str> = entities_from_file1.iter().map(|e| e.name()).collect();
+
         assert!(entity_names.contains(&"testFunc1"));
         assert!(entity_names.contains(&"TestClass"));
     }
-    
+
     #[test]
     fn test_find_paths_complex() {
         let mut kg = KnowledgeGraph::new();
-        
+
         // Create entities A, B, C, D with multiple paths: A->B->C, A->D->C
         let id_a = EntityId::new("A");
         let id_b = EntityId::new("B");
         let id_c = EntityId::new("C");
         let id_d = EntityId::new("D");
-        
+
         // Create entity A
         let base_a = BaseEntity::new(
             id_a.clone(),
@@ -1226,7 +1230,7 @@ mod tests {
             is_constructor: false,
             is_abstract: false,
         };
-        
+
         // Create entity B
         let base_b = BaseEntity::new(
             id_b.clone(),
@@ -1244,7 +1248,7 @@ mod tests {
             is_constructor: false,
             is_abstract: false,
         };
-        
+
         // Create entity C
         let base_c = BaseEntity::new(
             id_c.clone(),
@@ -1262,7 +1266,7 @@ mod tests {
             is_constructor: false,
             is_abstract: false,
         };
-        
+
         // Create entity D
         let base_d = BaseEntity::new(
             id_d.clone(),
@@ -1280,41 +1284,46 @@ mod tests {
             is_constructor: false,
             is_abstract: false,
         };
-        
+
         // Add entities
         kg.add_entity(function_a).unwrap();
         kg.add_entity(function_b).unwrap();
         kg.add_entity(function_c).unwrap();
         kg.add_entity(function_d).unwrap();
-        
+
         // Create paths: A->B->C and A->D->C
-        kg.create_relationship(id_a.clone(), id_b.clone(), RelationshipType::Calls).unwrap();
-        kg.create_relationship(id_b.clone(), id_c.clone(), RelationshipType::Calls).unwrap();
-        kg.create_relationship(id_a.clone(), id_d.clone(), RelationshipType::Calls).unwrap();
-        kg.create_relationship(id_d.clone(), id_c.clone(), RelationshipType::Calls).unwrap();
-        
+        kg.create_relationship(id_a.clone(), id_b.clone(), RelationshipType::Calls)
+            .unwrap();
+        kg.create_relationship(id_b.clone(), id_c.clone(), RelationshipType::Calls)
+            .unwrap();
+        kg.create_relationship(id_a.clone(), id_d.clone(), RelationshipType::Calls)
+            .unwrap();
+        kg.create_relationship(id_d.clone(), id_c.clone(), RelationshipType::Calls)
+            .unwrap();
+
         // Find paths from A to C
         let paths = kg.find_paths(&id_a, &id_c, 3);
-        
+
         // Should find two paths
         assert_eq!(paths.len(), 2);
-        
+
         // Check that paths are distinct
-        let path_names: Vec<Vec<String>> = paths.iter()
+        let path_names: Vec<Vec<String>> = paths
+            .iter()
             .map(|path| path.iter().map(|e| e.name().to_string()).collect())
             .collect();
-        
+
         // Check that both expected paths exist
         let path1 = vec!["A".to_string(), "B".to_string(), "C".to_string()];
         let path2 = vec!["A".to_string(), "D".to_string(), "C".to_string()];
-        
+
         assert!(path_names.contains(&path1) || path_names.contains(&path2));
     }
-    
+
     #[test]
     fn test_domain_concept_relationships() {
         let mut kg = KnowledgeGraph::new();
-        
+
         // Create two domain concepts with a relationship
         let user_id = EntityId::new("domain::User");
         let base_user = BaseEntity::new(
@@ -1323,14 +1332,14 @@ mod tests {
             EntityType::DomainConcept,
             None,
         );
-        
+
         let user = DomainConceptEntity {
             base: base_user,
             attributes: vec!["username".to_string(), "email".to_string()],
             description: Some("A user in the system".to_string()),
             confidence: 0.95,
         };
-        
+
         let order_id = EntityId::new("domain::Order");
         let base_order = BaseEntity::new(
             order_id.clone(),
@@ -1338,28 +1347,35 @@ mod tests {
             EntityType::DomainConcept,
             None,
         );
-        
+
         let order = DomainConceptEntity {
             base: base_order,
             attributes: vec!["items".to_string(), "total".to_string()],
             description: Some("An order made by a user".to_string()),
             confidence: 0.9,
         };
-        
+
         // Add concepts to graph
         kg.add_entity(user).unwrap();
         kg.add_entity(order).unwrap();
-        
+
         // Create relationship User -> Order
-        kg.create_relationship(user_id.clone(), order_id.clone(), RelationshipType::RelatesTo)
-            .unwrap();
-        
+        kg.create_relationship(
+            user_id.clone(),
+            order_id.clone(),
+            RelationshipType::RelatesTo,
+        )
+        .unwrap();
+
         // Verify relationship
         let outgoing = kg.get_outgoing_relationships(&user_id);
         assert_eq!(outgoing.len(), 1);
         assert_eq!(outgoing[0].target_id.0, "domain::Order");
-        assert!(matches!(outgoing[0].relationship_type, RelationshipType::RelatesTo));
-        
+        assert!(matches!(
+            outgoing[0].relationship_type,
+            RelationshipType::RelatesTo
+        ));
+
         // Check domain concepts can be related to code entities too
         let func_id = EntityId::new("func::place_order");
         let base_func = BaseEntity::new(
@@ -1368,7 +1384,7 @@ mod tests {
             EntityType::Function,
             Some("order.rs".to_string()),
         );
-        
+
         let function = FunctionEntity {
             base: base_func,
             parameters: vec![],
@@ -1379,24 +1395,31 @@ mod tests {
             is_constructor: false,
             is_abstract: false,
         };
-        
+
         kg.add_entity(function).unwrap();
-        
+
         // Create relationship Order -> place_order (implemented by)
-        kg.create_relationship(order_id.clone(), func_id.clone(), RelationshipType::RepresentedBy)
-            .unwrap();
-        
+        kg.create_relationship(
+            order_id.clone(),
+            func_id.clone(),
+            RelationshipType::RepresentedBy,
+        )
+        .unwrap();
+
         // Verify this relationship
         let order_rels = kg.get_outgoing_relationships(&order_id);
         assert_eq!(order_rels.len(), 1);
         assert_eq!(order_rels[0].target_id.0, "func::place_order");
-        assert!(matches!(order_rels[0].relationship_type, RelationshipType::RepresentedBy));
+        assert!(matches!(
+            order_rels[0].relationship_type,
+            RelationshipType::RepresentedBy
+        ));
     }
-    
+
     #[test]
     fn test_serialization_deserialization() {
         let mut kg = KnowledgeGraph::new();
-        
+
         // Add some entities and relationships
         let id_a = EntityId::new("A");
         let base_a = BaseEntity::new(
@@ -1405,7 +1428,7 @@ mod tests {
             EntityType::Function,
             Some("test.rs".to_string()),
         );
-        
+
         let function_a = FunctionEntity {
             base: base_a,
             parameters: vec![],
@@ -1416,7 +1439,7 @@ mod tests {
             is_constructor: false,
             is_abstract: false,
         };
-        
+
         let id_b = EntityId::new("B");
         let base_b = BaseEntity::new(
             id_b.clone(),
@@ -1424,7 +1447,7 @@ mod tests {
             EntityType::Function,
             Some("test.rs".to_string()),
         );
-        
+
         let function_b = FunctionEntity {
             base: base_b,
             parameters: vec![],
@@ -1435,28 +1458,29 @@ mod tests {
             is_constructor: false,
             is_abstract: false,
         };
-        
+
         kg.add_entity(function_a).unwrap();
         kg.add_entity(function_b).unwrap();
-        kg.create_relationship(id_a.clone(), id_b.clone(), RelationshipType::Calls).unwrap();
-        
+        kg.create_relationship(id_a.clone(), id_b.clone(), RelationshipType::Calls)
+            .unwrap();
+
         // Serialize to JSON
         let json = serde_json::to_string(&kg).unwrap();
-        
+
         // Deserialize back
         let deserialized_kg: KnowledgeGraph = serde_json::from_str(&json).unwrap();
-        
+
         // Check entities
         assert_eq!(deserialized_kg.entities.len(), 2);
         assert!(deserialized_kg.get_entity(&id_a).is_some());
         assert!(deserialized_kg.get_entity(&id_b).is_some());
-        
+
         // Note: The relationship_store is marked with #[serde(skip)]
         // so relationships are not automatically restored upon deserialization.
         // They need to be reconstructed from relationship_data.
         // For a proper test, we would need to check that relationship_data contains the relationship,
         // or initialize the relationship_store from relationship_data.
-        
+
         // For now, just verify that the relationship data is there
         assert!(!deserialized_kg.relationship_data.is_empty());
         assert_eq!(deserialized_kg.relationship_data.len(), 1);

@@ -1,9 +1,7 @@
 use anyhow::Result;
 use std::env;
 
-use crate::parser::domain_model::{
-    AttributeType, DomainEntity, DomainModelBuilder, EntityType,
-};
+use crate::parser::domain_model::{AttributeType, DomainEntity, DomainModelBuilder, EntityType};
 
 /// Domain model builder that uses an LLM to extract domain entities
 pub struct LlmModelExtractor {
@@ -18,7 +16,7 @@ impl LlmModelExtractor {
                     println!("Found OpenRouter API key, LLM domain extraction enabled");
                 }
                 key
-            },
+            }
             Err(_) => {
                 println!("OPENROUTER_API_KEY not set, using mock domain entities");
                 String::new()
@@ -32,21 +30,29 @@ impl DomainModelBuilder for LlmModelExtractor {
     fn extract_domain_model(&self, content: &str, file_path: &str) -> Result<Vec<DomainEntity>> {
         // Check if api key is set
         if self.api_key.is_empty() {
-            println!("  Note: Using mock domain entity (API key not set) for {}", file_path);
-            
+            println!(
+                "  Note: Using mock domain entity (API key not set) for {}",
+                file_path
+            );
+
             // Return a mock domain entity when no API key is provided
-            return Ok(vec![
-                DomainEntity {
-                    name: format!("MockEntity_{}", file_path.split('/').last().unwrap_or("unknown")),
-                    entity_type: EntityType::Class,
-                    attributes: [
-                        ("id".to_string(), AttributeType::String),
-                        ("name".to_string(), AttributeType::String),
-                    ].into_iter().collect(),
-                    relationships: vec![],
-                    description: Some("This is a mock domain entity because no API key was provided".to_string()),
-                }
-            ]);
+            return Ok(vec![DomainEntity {
+                name: format!(
+                    "MockEntity_{}",
+                    file_path.split('/').last().unwrap_or("unknown")
+                ),
+                entity_type: EntityType::Class,
+                attributes: [
+                    ("id".to_string(), AttributeType::String),
+                    ("name".to_string(), AttributeType::String),
+                ]
+                .into_iter()
+                .collect(),
+                relationships: vec![],
+                description: Some(
+                    "This is a mock domain entity because no API key was provided".to_string(),
+                ),
+            }]);
         }
 
         // We're going to need to use a synchronous approach since we're in an async context already
@@ -57,7 +63,7 @@ impl DomainModelBuilder for LlmModelExtractor {
             // Usually class/type definitions are at the beginning of files
             let first_size = 8000.min(content.len());
             let first = &content[..first_size];
-            
+
             if content.len() > first_size {
                 let remaining = content.len() - first_size;
                 let last_size = 2000.min(remaining);
@@ -69,15 +75,15 @@ impl DomainModelBuilder for LlmModelExtractor {
         } else {
             content.to_string()
         };
-        
+
         // Create a prompt for the LLM
         let _prompt = build_domain_extraction_prompt(&truncated_content, file_path);
-        
+
         // For this synchronous context, we'll just use a mock response
         // In a real implementation, we would need to refactor the main command to be fully async
         println!("  Note: Using mock domain entity for LLM call in synchronous context");
         let file_name = file_path.split('/').last().unwrap_or("unknown");
-        
+
         // Generate domain entity based on the file name
         let entity_type = if file_name.contains("entity") {
             EntityType::Class
@@ -90,21 +96,24 @@ impl DomainModelBuilder for LlmModelExtractor {
         } else {
             EntityType::Class
         };
-        
+
         // Return a more detailed mock entity based on the file name
-        Ok(vec![
-            DomainEntity {
-                name: format!("{}Model", file_name.split('.').next().unwrap_or("Domain").to_string()),
-                entity_type,
-                attributes: [
-                    ("id".to_string(), AttributeType::String),
-                    ("name".to_string(), AttributeType::String),
-                    ("created_at".to_string(), AttributeType::String),
-                ].into_iter().collect(),
-                relationships: vec![],
-                description: Some(format!("Domain model extracted from {}", file_path)),
-            }
-        ])
+        Ok(vec![DomainEntity {
+            name: format!(
+                "{}Model",
+                file_name.split('.').next().unwrap_or("Domain").to_string()
+            ),
+            entity_type,
+            attributes: [
+                ("id".to_string(), AttributeType::String),
+                ("name".to_string(), AttributeType::String),
+                ("created_at".to_string(), AttributeType::String),
+            ]
+            .into_iter()
+            .collect(),
+            relationships: vec![],
+            description: Some(format!("Domain model extracted from {}", file_path)),
+        }])
     }
 }
 
@@ -146,4 +155,3 @@ Only provide the JSON with no other text."#,
         file_path, content
     )
 }
-

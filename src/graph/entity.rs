@@ -44,7 +44,7 @@ impl EntityId {
     pub fn new(id: &str) -> Self {
         EntityId(id.to_string())
     }
-    
+
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -108,7 +108,7 @@ pub trait Entity {
     fn file_path(&self) -> Option<&String>;
     #[allow(dead_code)]
     fn metadata(&self) -> &HashMap<String, String>;
-    
+
     // Helper methods for MCP server
     fn path(&self) -> Option<&str> {
         self.file_path().map(|s| s.as_str())
@@ -174,7 +174,7 @@ impl Entity for BaseEntity {
     fn metadata(&self) -> &HashMap<String, String> {
         &self.metadata
     }
-    
+
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.metadata
     }
@@ -217,7 +217,7 @@ impl Entity for FunctionEntity {
     fn metadata(&self) -> &HashMap<String, String> {
         &self.base.metadata
     }
-    
+
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.base.metadata
     }
@@ -258,7 +258,7 @@ impl Entity for TypeEntity {
     fn metadata(&self) -> &HashMap<String, String> {
         &self.base.metadata
     }
-    
+
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.base.metadata
     }
@@ -297,7 +297,7 @@ impl Entity for ModuleEntity {
     fn metadata(&self) -> &HashMap<String, String> {
         &self.base.metadata
     }
-    
+
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.base.metadata
     }
@@ -337,7 +337,7 @@ impl Entity for VariableEntity {
     fn metadata(&self) -> &HashMap<String, String> {
         &self.base.metadata
     }
-    
+
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.base.metadata
     }
@@ -376,7 +376,7 @@ impl Entity for DomainConceptEntity {
     fn metadata(&self) -> &HashMap<String, String> {
         &self.base.metadata
     }
-    
+
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.base.metadata
     }
@@ -407,7 +407,7 @@ mod tests {
             EntityType::Function,
             Some("test.rs".to_string()),
         );
-        
+
         // Check basic properties
         assert_eq!(entity.id().0, "test::entity");
         assert_eq!(entity.name(), "TestEntity");
@@ -415,10 +415,12 @@ mod tests {
         assert_eq!(entity.file_path, Some("test.rs".to_string()));
         assert_eq!(entity.location(), None);
         assert!(entity.metadata().is_empty());
-        
+
         // Test metadata operations
         let mut entity_mut = entity.clone();
-        entity_mut.metadata_mut().insert("key".to_string(), "value".to_string());
+        entity_mut
+            .metadata_mut()
+            .insert("key".to_string(), "value".to_string());
         assert_eq!(entity_mut.metadata().len(), 1);
         assert_eq!(entity_mut.metadata().get("key"), Some(&"value".to_string()));
     }
@@ -433,13 +435,13 @@ mod tests {
             EntityType::Function,
             Some("test.rs".to_string()),
         );
-        
+
         let param = Parameter {
             name: "param1".to_string(),
             type_annotation: Some("String".to_string()),
             default_value: None,
         };
-        
+
         let function = FunctionEntity {
             base,
             parameters: vec![param],
@@ -450,13 +452,16 @@ mod tests {
             is_constructor: false,
             is_abstract: false,
         };
-        
+
         // Check entity properties
         assert_eq!(function.name(), "testFunc");
         assert!(matches!(function.entity_type(), EntityType::Function));
         assert_eq!(function.parameters.len(), 1);
         assert_eq!(function.parameters[0].name, "param1");
-        assert_eq!(function.parameters[0].type_annotation, Some("String".to_string()));
+        assert_eq!(
+            function.parameters[0].type_annotation,
+            Some("String".to_string())
+        );
         assert_eq!(function.return_type, Some("bool".to_string()));
         assert!(matches!(function.visibility, Visibility::Public));
         assert!(function.is_async);
@@ -473,11 +478,11 @@ mod tests {
             EntityType::Class,
             Some("test.rs".to_string()),
         );
-        
+
         let method_id = EntityId::new("test::class::method");
         let field_id = EntityId::new("test::class::field");
         let supertype_id = EntityId::new("test::parentclass");
-        
+
         let type_entity = TypeEntity {
             base,
             fields: vec![field_id],
@@ -486,7 +491,7 @@ mod tests {
             visibility: Visibility::Public,
             is_abstract: false,
         };
-        
+
         // Check entity properties
         assert_eq!(type_entity.name(), "TestClass");
         assert!(matches!(type_entity.entity_type(), EntityType::Class));
@@ -507,16 +512,16 @@ mod tests {
             EntityType::Module,
             Some("test_module.rs".to_string()),
         );
-        
+
         let child_id = EntityId::new("test::module::function");
-        
+
         let module = ModuleEntity {
             base,
             path: "src/test_module.rs".to_string(),
             children: vec![child_id],
             imports: vec!["std::collections::HashMap".to_string()],
         };
-        
+
         // Check entity properties
         assert_eq!(module.name(), "test_module");
         assert!(matches!(module.entity_type(), EntityType::Module));
@@ -536,7 +541,7 @@ mod tests {
             EntityType::Variable,
             Some("test.rs".to_string()),
         );
-        
+
         let variable = VariableEntity {
             base,
             type_annotation: Some("i32".to_string()),
@@ -544,7 +549,7 @@ mod tests {
             is_const: true,
             is_static: false,
         };
-        
+
         // Check entity properties
         assert_eq!(variable.name(), "test_var");
         assert!(matches!(variable.entity_type(), EntityType::Variable));
@@ -558,34 +563,32 @@ mod tests {
     fn test_domain_concept_entity() {
         // Create a domain concept entity
         let id = EntityId::new("domain::User");
-        let base = BaseEntity::new(
-            id,
-            "User".to_string(),
-            EntityType::DomainConcept,
-            None,
-        );
-        
+        let base = BaseEntity::new(id, "User".to_string(), EntityType::DomainConcept, None);
+
         let concept = DomainConceptEntity {
             base,
             attributes: vec!["username".to_string(), "email".to_string()],
             description: Some("A user in the system".to_string()),
             confidence: 0.95,
         };
-        
+
         // Check entity properties
         assert_eq!(concept.name(), "User");
         assert!(matches!(concept.entity_type(), EntityType::DomainConcept));
         assert_eq!(concept.attributes.len(), 2);
         assert_eq!(concept.attributes[0], "username");
         assert_eq!(concept.attributes[1], "email");
-        assert_eq!(concept.description, Some("A user in the system".to_string()));
+        assert_eq!(
+            concept.description,
+            Some("A user in the system".to_string())
+        );
         assert_eq!(concept.confidence, 0.95);
     }
-    
+
     #[test]
     fn test_file_path_accessor() {
         // Test the new file_path method on all entity types
-        
+
         // Base entity
         let id = EntityId::new("test::base");
         let base = BaseEntity::new(
@@ -594,9 +597,9 @@ mod tests {
             EntityType::Other("Test".to_string()),
             Some("test.rs".to_string()),
         );
-        
+
         assert_eq!(base.file_path(), Some(&"test.rs".to_string()));
-        
+
         // Function entity
         let id = EntityId::new("test::func");
         let base = BaseEntity::new(
@@ -605,7 +608,7 @@ mod tests {
             EntityType::Function,
             Some("function.rs".to_string()),
         );
-        
+
         let function = FunctionEntity {
             base,
             parameters: vec![],
@@ -616,28 +619,23 @@ mod tests {
             is_constructor: false,
             is_abstract: false,
         };
-        
+
         assert_eq!(function.file_path(), Some(&"function.rs".to_string()));
-        
+
         // Domain concept with no file path
         let id = EntityId::new("domain::User");
-        let base = BaseEntity::new(
-            id,
-            "User".to_string(),
-            EntityType::DomainConcept,
-            None,
-        );
-        
+        let base = BaseEntity::new(id, "User".to_string(), EntityType::DomainConcept, None);
+
         let concept = DomainConceptEntity {
             base,
             attributes: vec![],
             description: None,
             confidence: 0.0,
         };
-        
+
         assert_eq!(concept.file_path(), None);
     }
-    
+
     #[test]
     fn test_entity_type_conversion() {
         // Test different entity types
@@ -658,19 +656,16 @@ mod tests {
             EntityType::Type,
             EntityType::Other("CustomType".to_string()),
         ];
-        
+
         for entity_type in types {
             let id = EntityId::new("test");
-            let base = BaseEntity::new(
-                id.clone(),
-                "Test".to_string(),
-                entity_type.clone(),
-                None,
-            );
-            
+            let base = BaseEntity::new(id.clone(), "Test".to_string(), entity_type.clone(), None);
+
             // Entity type should be preserved
-            assert_eq!(format!("{:?}", base.entity_type()), format!("{:?}", entity_type));
+            assert_eq!(
+                format!("{:?}", base.entity_type()),
+                format!("{:?}", entity_type)
+            );
         }
     }
 }
-

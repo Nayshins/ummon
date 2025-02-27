@@ -1,16 +1,12 @@
-use std::sync::Arc;
 use anyhow::Result;
+use std::sync::Arc;
 use tokio::io::stdin;
 use tokio::io::stdout;
-use tracing::{info, error};
+use tracing::{error, info};
 
 use crate::cli::TransportType;
 use crate::graph::knowledge_graph::KnowledgeGraph;
-use crate::mcp_server::{
-    ByteTransport, 
-    UmmonRouter, 
-    Server
-};
+use crate::mcp_server::{ByteTransport, Server, UmmonRouter};
 
 /// Run the MCP server with the specified transport
 pub async fn run(transport_type: &TransportType) -> Result<()> {
@@ -24,17 +20,24 @@ pub async fn run(transport_type: &TransportType) -> Result<()> {
             if entity_count == 0 {
                 error!("Knowledge graph was loaded but contains 0 entities");
                 error!("Please run `ummon index <directory>` to populate the knowledge graph");
-                return Err(anyhow::anyhow!("Empty knowledge graph, please run `ummon index <directory>` to populate it"));
+                return Err(anyhow::anyhow!(
+                    "Empty knowledge graph, please run `ummon index <directory>` to populate it"
+                ));
             }
-            
-            info!("Successfully loaded knowledge graph with {} entities and {} relationships", 
-                  entity_count, kg.get_relationship_count());
+
+            info!(
+                "Successfully loaded knowledge graph with {} entities and {} relationships",
+                entity_count,
+                kg.get_relationship_count()
+            );
             kg
-        },
+        }
         Err(e) => {
             error!("Failed to load knowledge graph: {}", e);
             error!("Please run `ummon index <directory>` first to create a knowledge graph");
-            return Err(anyhow::anyhow!("Knowledge graph not found, please run `ummon index <directory>` first"));
+            return Err(anyhow::anyhow!(
+                "Knowledge graph not found, please run `ummon index <directory>` first"
+            ));
         }
     };
 
