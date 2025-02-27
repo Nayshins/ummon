@@ -1,11 +1,10 @@
 use serde_json::Value;
-use std::borrow::Borrow;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use crate::graph::entity::{EntityId, EntityType};
+use crate::graph::entity::EntityType;
 use crate::graph::knowledge_graph::KnowledgeGraph;
 use crate::mcp_core::{
     CapabilitiesBuilder, Content, Resource, ResourceError, Router, ServerCapabilities, Tool,
@@ -502,7 +501,10 @@ impl UmmonRouter {
 
             // Collect module and file entities for structure analysis
             if matches!(entity.entity_type(), EntityType::Module | EntityType::File) {
-                module_entities.push(entity.clone());
+                // Use to_owned to get owned entity instead of clone on reference
+                if let Some(owned_entity) = self.knowledge_graph.get_entity(&entity.id()) {
+                    module_entities.push(owned_entity);
+                }
             }
         }
 
@@ -907,7 +909,7 @@ impl UmmonRouter {
                     result.push_str(&format!("    - {}/\n", l3_name));
 
                     // Show up to 5 files per module
-                    for (idx, file) in l3_files.iter().take(5).enumerate() {
+                    for (_idx, file) in l3_files.iter().take(5).enumerate() {
                         result.push_str(&format!("      - {}\n", file));
                     }
 

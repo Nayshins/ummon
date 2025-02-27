@@ -23,6 +23,12 @@ Named after the AI Ummon from Dan Simmons' Hyperion Cantos, this project provide
    - Maps domain concepts to implementation details
    - Creates a bridge between technical and business understanding
 
+4. **AI Agent Integration with MCP**
+   - Provides Model Context Protocol (MCP) server for AI agent interaction
+   - Enables agents to explore code relationships and architecture
+   - Advanced visualization tools for navigating complex codebases
+   - Find relevant files for specific tasks or features
+
 ## Installation and Setup
 
 ```
