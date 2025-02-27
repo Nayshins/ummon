@@ -329,6 +329,12 @@ impl KnowledgeGraph {
     pub fn get_relationship_count(&self) -> usize {
         self.relationship_data.len()
     }
+    
+    /// Get all relationships
+    pub fn get_all_relationships(&self) -> Result<Vec<Relationship>> {
+        // Simply return a clone of all the relationship data
+        Ok(self.relationship_data.clone())
+    }
 
     /// Find entities related to a domain concept
     #[allow(dead_code)]
