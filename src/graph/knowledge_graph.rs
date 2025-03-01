@@ -21,12 +21,13 @@ pub struct KnowledgeGraph {
     // Serializable relationship data
     relationship_data: Vec<Relationship>,
 
-    // Domain concept storage
-    domain_concepts: HashMap<String, DomainConceptEntity>,
+    // Search index for efficient lookups
+    #[serde(skip)]
+    search_index: HashMap<String, Vec<EntityId>>,
 }
 
 /// Type for storing different entity types
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 enum EntityStorage {
     Function(FunctionEntity),
     Type(TypeEntity),
@@ -74,7 +75,7 @@ impl KnowledgeGraph {
             entities: HashMap::new(),
             relationship_store: RelationshipStore::new(),
             relationship_data: Vec::new(),
-            domain_concepts: HashMap::new(),
+            search_index: HashMap::new(),
         }
     }
 
@@ -82,69 +83,142 @@ impl KnowledgeGraph {
     pub fn add_entity<E: Entity + 'static>(&mut self, entity: E) -> Result<()> {
         let id = entity.id().clone();
 
-        // Store based on entity type
-        let storage = match entity.entity_type() {
-            EntityType::Function | EntityType::Method => {
-                if let Some(func_entity) = downcast_entity::<FunctionEntity>(entity) {
-                    EntityStorage::Function(func_entity)
-                } else {
-                    return Err(anyhow::anyhow!("Entity is not a FunctionEntity"));
+        // First, we'll try a direct cast if entity is already a concrete type
+        let storage = if let Some(func) =
+            (&entity as &dyn std::any::Any).downcast_ref::<FunctionEntity>()
+        {
+            EntityStorage::Function(func.clone())
+        } else if let Some(typ) = (&entity as &dyn std::any::Any).downcast_ref::<TypeEntity>() {
+            EntityStorage::Type(typ.clone())
+        } else if let Some(module) = (&entity as &dyn std::any::Any).downcast_ref::<ModuleEntity>()
+        {
+            EntityStorage::Module(module.clone())
+        } else if let Some(var) = (&entity as &dyn std::any::Any).downcast_ref::<VariableEntity>() {
+            EntityStorage::Variable(var.clone())
+        } else if let Some(domain) =
+            (&entity as &dyn std::any::Any).downcast_ref::<DomainConceptEntity>()
+        {
+            EntityStorage::DomainConcept(domain.clone())
+        } else if let Some(base) = (&entity as &dyn std::any::Any).downcast_ref::<BaseEntity>() {
+            EntityStorage::Base(base.clone())
+        } else {
+            // If direct cast fails, fall back to the entity type check method
+            match entity.entity_type() {
+                EntityType::Function | EntityType::Method => {
+                    if let Some(func_entity) = downcast_entity::<FunctionEntity>(entity) {
+                        EntityStorage::Function(func_entity)
+                    } else {
+                        return Err(anyhow::anyhow!("Entity is not a FunctionEntity"));
+                    }
                 }
-            }
-            EntityType::Class
-            | EntityType::Interface
-            | EntityType::Trait
-            | EntityType::Struct
-            | EntityType::Enum
-            | EntityType::Type => {
-                if let Some(type_entity) = downcast_entity::<TypeEntity>(entity) {
-                    EntityStorage::Type(type_entity)
-                } else {
-                    return Err(anyhow::anyhow!("Entity is not a TypeEntity"));
+                EntityType::Class
+                | EntityType::Interface
+                | EntityType::Trait
+                | EntityType::Struct
+                | EntityType::Enum
+                | EntityType::Type => {
+                    if let Some(type_entity) = downcast_entity::<TypeEntity>(entity) {
+                        EntityStorage::Type(type_entity)
+                    } else {
+                        return Err(anyhow::anyhow!("Entity is not a TypeEntity"));
+                    }
                 }
-            }
-            EntityType::Module | EntityType::File => {
-                if let Some(module_entity) = downcast_entity::<ModuleEntity>(entity) {
-                    EntityStorage::Module(module_entity)
-                } else {
-                    return Err(anyhow::anyhow!("Entity is not a ModuleEntity"));
+                EntityType::Module | EntityType::File => {
+                    if let Some(module_entity) = downcast_entity::<ModuleEntity>(entity) {
+                        EntityStorage::Module(module_entity)
+                    } else {
+                        return Err(anyhow::anyhow!("Entity is not a ModuleEntity"));
+                    }
                 }
-            }
-            EntityType::Variable | EntityType::Field | EntityType::Constant => {
-                if let Some(var_entity) = downcast_entity::<VariableEntity>(entity) {
-                    EntityStorage::Variable(var_entity)
-                } else {
-                    return Err(anyhow::anyhow!("Entity is not a VariableEntity"));
+                EntityType::Variable | EntityType::Field | EntityType::Constant => {
+                    if let Some(var_entity) = downcast_entity::<VariableEntity>(entity) {
+                        EntityStorage::Variable(var_entity)
+                    } else {
+                        return Err(anyhow::anyhow!("Entity is not a VariableEntity"));
+                    }
                 }
-            }
-            EntityType::DomainConcept => {
-                if let Some(domain_entity) = downcast_entity::<DomainConceptEntity>(entity) {
-                    // Also store in domain concepts map
-                    self.domain_concepts
-                        .insert(domain_entity.name().to_string(), domain_entity.clone());
-                    EntityStorage::DomainConcept(domain_entity)
-                } else {
-                    return Err(anyhow::anyhow!("Entity is not a DomainConceptEntity"));
+                EntityType::DomainConcept => {
+                    if let Some(domain_entity) = downcast_entity::<DomainConceptEntity>(entity) {
+                        EntityStorage::DomainConcept(domain_entity)
+                    } else {
+                        return Err(anyhow::anyhow!("Entity is not a DomainConceptEntity"));
+                    }
                 }
-            }
-            _ => {
-                if let Some(base_entity) = downcast_entity::<BaseEntity>(entity) {
-                    EntityStorage::Base(base_entity)
-                } else {
-                    return Err(anyhow::anyhow!(
-                        "Entity could not be converted to a specific type"
-                    ));
+                _ => {
+                    if let Some(base_entity) = downcast_entity::<BaseEntity>(entity) {
+                        EntityStorage::Base(base_entity)
+                    } else {
+                        return Err(anyhow::anyhow!(
+                            "Entity could not be converted to a specific type"
+                        ));
+                    }
                 }
             }
         };
 
-        self.entities.insert(id, Box::new(storage));
+        // Before inserting, let's extract the info we need for indexing
+        let storage_ref = &storage;
+        let entity_name = storage_ref.as_entity().name().to_lowercase();
+        let entity_path = storage_ref.as_entity().path().map(|p| p.to_lowercase());
+        let entity_type = storage_ref
+            .as_entity()
+            .entity_type()
+            .to_string()
+            .to_lowercase();
+
+        // Collect metadata values
+        let metadata_values: Vec<String> = storage_ref
+            .as_entity()
+            .metadata()
+            .iter()
+            .map(|(_key, v)| v.to_lowercase())
+            .collect();
+
+        // Now insert the entity
+        self.entities.insert(id.clone(), Box::new(storage));
+
+        // Index by name (lowercase for case-insensitive search)
+        self.search_index
+            .entry(entity_name)
+            .or_default()
+            .push(id.clone());
+
+        // Index by file path if available
+        if let Some(path_lower) = entity_path {
+            self.search_index
+                .entry(path_lower)
+                .or_default()
+                .push(id.clone());
+        }
+
+        // Index by entity type
+        self.search_index
+            .entry(entity_type)
+            .or_default()
+            .push(id.clone());
+
+        // Index by any metadata fields
+        for value_lower in metadata_values {
+            self.search_index
+                .entry(value_lower)
+                .or_default()
+                .push(id.clone());
+        }
+
         Ok(())
     }
 
     /// Get an entity by its ID
     pub fn get_entity(&self, id: &EntityId) -> Option<&dyn Entity> {
         self.entities.get(id).map(|e| e.as_entity())
+    }
+
+    /// Get an entity by its ID with standardized error handling
+    pub fn get_entity_result(&self, id: &EntityId) -> Result<&dyn Entity> {
+        self.entities
+            .get(id)
+            .map(|e| e.as_entity())
+            .ok_or_else(|| anyhow::anyhow!("Entity with ID {} not found", id.as_str()))
     }
 
     /// Get all entities
@@ -162,20 +236,43 @@ impl KnowledgeGraph {
 
     /// Add a relationship between entities
     pub fn add_relationship(&mut self, relationship: Relationship) {
-        self.relationship_data.push(relationship.clone());
         self.relationship_store.add_relationship(relationship);
     }
 
     /// Create and add a relationship between entities
+    ///
+    /// Tries to locate both source and target entities in the graph.
+    /// If the source entity doesn't exist, the relationship creation fails.
+    /// If the target entity doesn't exist, it may be an external reference (like a standard library function),
+    /// so we create a placeholder BaseEntity to represent it.
     pub fn create_relationship(
         &mut self,
         source_id: EntityId,
         target_id: EntityId,
         rel_type: RelationshipType,
     ) -> Result<()> {
-        // Allow creating relationships even if entities don't exist yet
-        // This makes the knowledge graph more flexible and allows for relationships
-        // between entities that are referenced but not yet fully analyzed
+        // Validate that the source entity exists
+        self.get_entity_result(&source_id)?;
+
+        // Check if target entity exists, if not, create a placeholder
+        if self.get_entity(&target_id).is_none() {
+            // It might be a standard library or external reference
+            // Create a placeholder BaseEntity for the target
+            let target_name = target_id
+                .as_str()
+                .split("::")
+                .last()
+                .unwrap_or(target_id.as_str());
+            let base_entity = crate::graph::entity::BaseEntity::new(
+                target_id.clone(),
+                target_name.to_string(),
+                crate::graph::entity::EntityType::Function, // Assume it's a function for now
+                None,                                       // No file path for external entities
+            );
+
+            // Add the placeholder entity to the graph
+            self.add_entity(base_entity)?;
+        }
 
         // Generate relationship ID
         let rel_id = Relationship::generate_id(&source_id, &target_id, &rel_type);
@@ -240,106 +337,108 @@ impl KnowledgeGraph {
             .collect()
     }
 
-    /// Find paths between entities
+    /// Find paths between entities using an iterative approach to avoid stack overflow
     pub fn find_paths(
         &self,
         from_id: &EntityId,
         to_id: &EntityId,
         max_depth: usize,
     ) -> Vec<Vec<&dyn Entity>> {
-        let mut paths = Vec::new();
-        let mut visited = HashSet::new();
-        let mut current_path = Vec::new();
+        let mut result_paths = Vec::new();
 
-        if let Some(entity) = self.get_entity(from_id) {
-            visited.insert(from_id.clone());
-            current_path.push(entity);
+        // If the source entity doesn't exist, return empty results
+        let start_entity = match self.get_entity(from_id) {
+            Some(entity) => entity,
+            None => return Vec::new(),
+        };
 
-            self.find_paths_recursive(
-                from_id,
-                to_id,
-                max_depth,
-                &mut visited,
-                &mut current_path,
-                &mut paths,
-            );
-        }
+        // Stack of (current_id, current_path, visited_set)
+        let mut stack = vec![(
+            from_id.clone(),
+            vec![start_entity],
+            HashSet::<EntityId>::from([from_id.clone()]),
+        )];
 
-        paths
-    }
+        while let Some((current_id, current_path, visited)) = stack.pop() {
+            // Check if we've reached the target
+            if &current_id == to_id {
+                result_paths.push(current_path);
+                continue;
+            }
 
-    fn find_paths_recursive<'a>(
-        &'a self,
-        current_id: &EntityId,
-        target_id: &EntityId,
-        max_depth: usize,
-        visited: &mut HashSet<EntityId>,
-        current_path: &mut Vec<&'a dyn Entity>,
-        paths: &mut Vec<Vec<&'a dyn Entity>>,
-    ) {
-        if current_id == target_id {
-            // Found a path
-            paths.push(current_path.clone());
-            return;
-        }
+            // Check if we've reached max depth
+            if current_path.len() >= max_depth {
+                continue;
+            }
 
-        if current_path.len() >= max_depth {
-            // Reached maximum depth
-            return;
-        }
+            // Get outgoing relationships
+            let relationships = self
+                .relationship_store
+                .get_outgoing_relationships(&current_id);
 
-        // Get outgoing relationships
-        let relationships = self
-            .relationship_store
-            .get_outgoing_relationships(current_id);
+            // Add relationships to stack in reverse order (so they're processed in the original order)
+            for rel in relationships.into_iter().rev() {
+                let next_id = &rel.target_id;
 
-        for rel in relationships {
-            let next_id = &rel.target_id;
+                // Skip if already visited
+                if visited.contains(next_id) {
+                    continue;
+                }
 
-            if !visited.contains(next_id) {
+                // Get the next entity
                 if let Some(next_entity) = self.get_entity(next_id) {
-                    // Mark as visited
-                    visited.insert(next_id.clone());
-                    current_path.push(next_entity);
+                    // Create new path and visited set for this branch
+                    let mut new_path = current_path.clone();
+                    new_path.push(next_entity);
 
-                    // Recursive call
-                    self.find_paths_recursive(
-                        next_id,
-                        target_id,
-                        max_depth,
-                        visited,
-                        current_path,
-                        paths,
-                    );
+                    let mut new_visited = visited.clone();
+                    new_visited.insert(next_id.clone());
 
-                    // Backtrack
-                    current_path.pop();
-                    visited.remove(next_id);
+                    // Add to stack
+                    stack.push((next_id.clone(), new_path, new_visited));
                 }
             }
         }
+
+        result_paths
     }
 
     /// Get domain concepts
     pub fn get_domain_concepts(&self) -> Vec<&DomainConceptEntity> {
-        self.domain_concepts.values().collect()
+        self.get_entities_by_type(&EntityType::DomainConcept)
+            .into_iter()
+            .filter_map(|entity| {
+                if let Some(boxed_storage) = self.entities.get(entity.id()) {
+                    match &**boxed_storage {
+                        EntityStorage::DomainConcept(domain_concept) => Some(domain_concept),
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     /// Get the total number of relationships
     pub fn get_relationship_count(&self) -> usize {
-        self.relationship_data.len()
+        self.relationship_store.get_all_relationships().len()
     }
 
     /// Get all relationships
     pub fn get_all_relationships(&self) -> Result<Vec<Relationship>> {
-        // Simply return a clone of all the relationship data
-        Ok(self.relationship_data.clone())
+        // Get relationships from relationship_store
+        Ok(self.relationship_store.get_all_relationships())
     }
 
     /// Find entities related to a domain concept
     #[allow(dead_code)]
     pub fn get_entities_for_domain_concept(&self, concept_name: &str) -> Vec<&dyn Entity> {
-        if let Some(concept) = self.domain_concepts.get(concept_name) {
+        // Find domain concept entities by name
+        let domain_concepts = self.get_domain_concepts();
+        let concept = domain_concepts.iter().find(|c| c.name() == concept_name);
+
+        if let Some(concept) = concept {
             self.get_related_entities(concept.id(), Some(&RelationshipType::RepresentedBy))
         } else {
             Vec::new()
@@ -355,8 +454,13 @@ impl KnowledgeGraph {
             .into_iter()
             .filter_map(|e| {
                 if let EntityType::DomainConcept = e.entity_type() {
-                    // This is a bit hacky but we know we have a DomainConceptEntity
-                    self.domain_concepts.get(e.name())
+                    if let Some(EntityStorage::DomainConcept(domain_concept)) =
+                        self.entities.get(e.id()).map(|boxed| &**boxed)
+                    {
+                        Some(domain_concept)
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 }
@@ -439,24 +543,83 @@ impl KnowledgeGraph {
     }
 
     pub fn save_to_file(&self, path: &str) -> Result<()> {
-        let json = serde_json::to_string_pretty(&self)?;
+        // Create a serializable version of the graph
+        // We can't clone entities directly since Box<EntityStorage> doesn't implement Clone
+        // Instead, we'll manually serialize the current graph state
+
+        let serialized = serde_json::json!({
+            "entities": self.entities,
+            "relationship_data": self.relationship_store.get_all_relationships(),
+        });
+
+        let json = serde_json::to_string_pretty(&serialized)?;
         std::fs::write(path, json)?;
         Ok(())
     }
 
     pub fn load_from_file(path: &str) -> Result<Self> {
         let content = std::fs::read_to_string(path)?;
-        let mut graph: Self = serde_json::from_str(&content)?;
 
-        // Rebuild relationship store from serialized data
-        for rel in &graph.relationship_data {
-            graph.relationship_store.add_relationship(rel.clone());
+        // Parse the JSON manually to extract entities and relationships
+        let parsed: serde_json::Value = serde_json::from_str(&content)?;
+
+        // Create a new graph
+        let mut graph = KnowledgeGraph::new();
+
+        // Load entities
+        if let Some(entities_json) = parsed.get("entities") {
+            let entities: HashMap<EntityId, Box<EntityStorage>> =
+                serde_json::from_value(entities_json.clone())?;
+
+            graph.entities = entities;
         }
+
+        // Load relationships
+        if let Some(rels_json) = parsed.get("relationship_data") {
+            let relationships: Vec<Relationship> = serde_json::from_value(rels_json.clone())?;
+
+            for rel in relationships {
+                graph.add_relationship(rel);
+            }
+        }
+
+        // Rebuild search index - we need to be careful with borrowing here
+        let mut search_index: HashMap<String, Vec<EntityId>> = HashMap::new();
+
+        for (id, entity_storage) in &graph.entities {
+            let entity = entity_storage.as_entity();
+
+            // Index by name
+            let name = entity.name().to_lowercase();
+            search_index.entry(name).or_default().push(id.clone());
+
+            // Index by file path if available
+            if let Some(path) = entity.path() {
+                let path_lower = path.to_lowercase();
+                search_index.entry(path_lower).or_default().push(id.clone());
+            }
+
+            // Index by entity type
+            let type_str = entity.entity_type().to_string().to_lowercase();
+            search_index.entry(type_str).or_default().push(id.clone());
+
+            // Index by any metadata fields
+            for (_, value) in entity.metadata().iter() {
+                let value_lower = value.to_lowercase();
+                search_index
+                    .entry(value_lower)
+                    .or_default()
+                    .push(id.clone());
+            }
+        }
+
+        // Now assign the rebuilt search index
+        graph.search_index = search_index;
 
         Ok(graph)
     }
 
-    // Search functionality for MCP server
+    // Search functionality for MCP server using the search index
     pub fn search(&self, query: &str) -> Result<Vec<&dyn Entity>> {
         // Convert query to lowercase for case-insensitive matching
         let query = query.to_lowercase();
@@ -472,99 +635,86 @@ impl KnowledgeGraph {
             return Ok(Vec::new());
         }
 
-        // Prepare results collection
-        let mut results = Vec::new();
+        // Use a HashSet to avoid duplicate entity IDs
+        let mut entity_ids = HashSet::new();
         let mut scores = HashMap::new();
 
-        // Scan all entities and compute match scores
-        for entity_storage in self.entities.values() {
-            let entity = entity_storage.as_entity();
-            let mut score = 0.0;
-
-            // 1. Check for exact matches on the entity name
-            let name = entity.name().to_lowercase();
-            if name == query {
-                score += 10.0; // Exact match is heavily weighted
-            } else if name.contains(&query) {
-                score += 5.0; // Full query contained within name is good
-            }
-
-            // 2. Check for token matches
-            let mut token_matches = 0;
-            for token in &query_tokens {
-                if name.contains(token) {
-                    token_matches += 1;
-                }
-
-                // Check in file path
-                if let Some(path) = entity.path() {
-                    if path.to_lowercase().contains(token) {
-                        token_matches += 1;
-                    }
-                }
-
-                // Check in entity type string
-                if entity
-                    .entity_type()
-                    .to_string()
-                    .to_lowercase()
-                    .contains(token)
-                {
-                    token_matches += 1;
-                }
-
-                // Check in metadata
-                for (_, value) in entity.metadata().iter() {
-                    if value.to_lowercase().contains(token) {
-                        token_matches += 1;
-                        break;
-                    }
-                }
-            }
-
-            // Calculate token match score
-            if token_matches > 0 {
-                score += (token_matches as f32 / query_tokens.len() as f32) * 3.0;
-            }
-
-            // 3. Entity type specific boosts
-            match entity.entity_type() {
-                EntityType::Function | EntityType::Method => {
-                    if query.contains("function")
-                        || query.contains("method")
-                        || query.contains("call")
-                    {
-                        score += 2.0;
-                    }
-                }
-                EntityType::Class | EntityType::Struct | EntityType::Type => {
-                    if query.contains("class") || query.contains("type") || query.contains("struct")
-                    {
-                        score += 2.0;
-                    }
-                }
-                EntityType::Module | EntityType::File => {
-                    if query.contains("module") || query.contains("file") {
-                        score += 2.0;
-                    }
-                }
-                EntityType::DomainConcept => {
-                    if query.contains("domain")
-                        || query.contains("concept")
-                        || query.contains("business")
-                    {
-                        score += 2.0;
-                    }
-                }
-                _ => {}
-            }
-
-            // If we have any score, add to results
-            if score > 0.0 {
-                results.push(entity);
-                scores.insert(entity.id().as_str(), score);
+        // Check for exact match on full query
+        if let Some(exact_matches) = self.search_index.get(&query) {
+            for id in exact_matches {
+                entity_ids.insert(id.clone());
+                scores.insert(id.as_str(), 10.0f32); // Highest score for exact matches
             }
         }
+
+        // Check for token matches
+        for token in &query_tokens {
+            if let Some(token_matches) = self.search_index.get(*token) {
+                for id in token_matches {
+                    let entry = scores.entry(id.as_str()).or_insert(0.0);
+                    *entry += 2.0; // Add score for each token match
+                    entity_ids.insert(id.clone());
+                }
+            }
+
+            // Check for partial matches
+            for (indexed_term, ids) in &self.search_index {
+                if indexed_term.contains(token) {
+                    for id in ids {
+                        let entry = scores.entry(id.as_str()).or_insert(0.0);
+                        *entry += 1.0; // Smaller score for partial matches
+                        entity_ids.insert(id.clone());
+                    }
+                }
+            }
+        }
+
+        // Additional scoring for entity types
+        for id in &entity_ids {
+            if let Some(entity) = self.get_entity(id) {
+                let score_entry = scores.entry(id.as_str()).or_insert(0.0);
+
+                // Entity type specific boosts
+                match entity.entity_type() {
+                    EntityType::Function | EntityType::Method => {
+                        if query.contains("function")
+                            || query.contains("method")
+                            || query.contains("call")
+                        {
+                            *score_entry += 2.0;
+                        }
+                    }
+                    EntityType::Class | EntityType::Struct | EntityType::Type => {
+                        if query.contains("class")
+                            || query.contains("type")
+                            || query.contains("struct")
+                        {
+                            *score_entry += 2.0;
+                        }
+                    }
+                    EntityType::Module | EntityType::File => {
+                        if query.contains("module") || query.contains("file") {
+                            *score_entry += 2.0;
+                        }
+                    }
+                    EntityType::DomainConcept => {
+                        if query.contains("domain")
+                            || query.contains("concept")
+                            || query.contains("business")
+                        {
+                            *score_entry += 2.0;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // Collect results
+        let mut results: Vec<_> = entity_ids
+            .iter()
+            .filter_map(|id| self.get_entity(id))
+            .collect();
 
         // Sort results by score
         results.sort_by(|a, b| {
@@ -588,6 +738,9 @@ impl KnowledgeGraph {
     // Helper method to get all relationships for an entity
     pub fn get_relationships_for_entity(&self, entity_id: &str) -> Result<Vec<Relationship>> {
         let entity_id = EntityId::new(entity_id);
+
+        // Verify that the entity exists
+        self.get_entity_result(&entity_id)?;
 
         let outgoing = self.get_outgoing_relationships(&entity_id);
         let incoming = self.get_incoming_relationships(&entity_id);
@@ -1032,18 +1185,22 @@ mod tests {
         // Try to create relationship with non-existent entity
         let id_nonexistent = EntityId::new("NonExistent");
 
-        // Based on the implementation, the current create_relationship implementation
-        // doesn't validate if the target entity exists, it just creates the relationship
+        // The updated implementation validates that both entities exist
         let result = kg.create_relationship(
             id_a.clone(),
             id_nonexistent.clone(),
             RelationshipType::Calls,
         );
 
-        // Should succeed (current implementation doesn't validate entity existence)
-        assert!(result.is_ok());
+        // Should fail since the target entity doesn't exist
+        assert!(result.is_err());
 
-        // But the related entities should be empty because the target doesn't exist
+        // Check if the error message mentions the missing entity
+        if let Err(e) = result {
+            assert!(e.to_string().contains("NonExistent"));
+        }
+
+        // No relationships should be created
         let related = kg.get_related_entities(&id_a, Some(&RelationshipType::Calls));
         assert_eq!(related.len(), 0);
     }
@@ -1464,27 +1621,91 @@ mod tests {
         kg.create_relationship(id_a.clone(), id_b.clone(), RelationshipType::Calls)
             .unwrap();
 
-        // Serialize to JSON
-        let json = serde_json::to_string(&kg).unwrap();
+        // Write to a temporary file
+        let temp_file = std::env::temp_dir().join("test_kg.json");
+        let temp_path = temp_file.to_str().unwrap();
 
-        // Deserialize back
-        let deserialized_kg: KnowledgeGraph = serde_json::from_str(&json).unwrap();
+        // Save to file
+        kg.save_to_file(temp_path).unwrap();
+
+        // Load back
+        let loaded_kg = KnowledgeGraph::load_from_file(temp_path).unwrap();
+
+        // Clean up
+        std::fs::remove_file(temp_path).unwrap();
 
         // Check entities
-        assert_eq!(deserialized_kg.entities.len(), 2);
-        assert!(deserialized_kg.get_entity(&id_a).is_some());
-        assert!(deserialized_kg.get_entity(&id_b).is_some());
+        assert_eq!(loaded_kg.entities.len(), 2);
+        assert!(loaded_kg.get_entity(&id_a).is_some());
+        assert!(loaded_kg.get_entity(&id_b).is_some());
 
-        // Note: The relationship_store is marked with #[serde(skip)]
-        // so relationships are not automatically restored upon deserialization.
-        // They need to be reconstructed from relationship_data.
-        // For a proper test, we would need to check that relationship_data contains the relationship,
-        // or initialize the relationship_store from relationship_data.
+        // Check relationships are restored
+        let relationships = loaded_kg.get_outgoing_relationships(&id_a);
+        assert_eq!(relationships.len(), 1);
+        assert_eq!(relationships[0].target_id.0, "B");
+        assert!(matches!(
+            relationships[0].relationship_type,
+            RelationshipType::Calls
+        ));
+    }
 
-        // For now, just verify that the relationship data is there
-        assert!(!deserialized_kg.relationship_data.is_empty());
-        assert_eq!(deserialized_kg.relationship_data.len(), 1);
-        assert_eq!(deserialized_kg.relationship_data[0].source_id.0, "A");
-        assert_eq!(deserialized_kg.relationship_data[0].target_id.0, "B");
+    #[test]
+    fn test_large_graph() {
+        // Create a large graph with 1000 entities in a chain
+        let mut kg = KnowledgeGraph::new();
+
+        // Create entities
+        for i in 0..1000 {
+            let id = EntityId::new(&format!("entity{}", i));
+            let base = BaseEntity::new(
+                id.clone(),
+                format!("Entity{}", i),
+                EntityType::Function,
+                Some("test.rs".to_string()),
+            );
+
+            let function = FunctionEntity {
+                base,
+                parameters: vec![],
+                return_type: None,
+                visibility: Visibility::Public,
+                is_async: false,
+                is_static: false,
+                is_constructor: false,
+                is_abstract: false,
+            };
+
+            kg.add_entity(function).unwrap();
+
+            // Create relationships (each entity calls the next one)
+            if i > 0 {
+                let source_id = EntityId::new(&format!("entity{}", i - 1));
+                let target_id = EntityId::new(&format!("entity{}", i));
+                kg.create_relationship(source_id, target_id, RelationshipType::Calls)
+                    .unwrap();
+            }
+        }
+
+        // Test entity retrieval
+        let entity500 = kg.get_entity(&EntityId::new("entity500"));
+        assert!(entity500.is_some());
+        assert_eq!(entity500.unwrap().name(), "Entity500");
+
+        // Test path finding with limited depth
+        let paths_small = kg.find_paths(&EntityId::new("entity0"), &EntityId::new("entity10"), 15);
+        assert_eq!(paths_small.len(), 1);
+        assert_eq!(paths_small[0].len(), 11); // entity0 through entity10
+
+        // Test search functionality
+        let search_results = kg.search("entity5").unwrap();
+        assert!(!search_results.is_empty());
+
+        // Test validated relationship creation
+        let result = kg.create_relationship(
+            EntityId::new("entity999"),
+            EntityId::new("nonexistent"),
+            RelationshipType::Calls,
+        );
+        assert!(result.is_err());
     }
 }

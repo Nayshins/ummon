@@ -181,6 +181,11 @@ impl RelationshipStore {
             None => Vec::new(),
         }
     }
+
+    /// Get all relationships
+    pub fn get_all_relationships(&self) -> Vec<Relationship> {
+        self.relationships.values().cloned().collect()
+    }
 }
 
 #[cfg(test)]
