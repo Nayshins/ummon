@@ -24,10 +24,14 @@ Named after the AI Ummon from Dan Simmons' Hyperion Cantos, this project provide
    - Maps relationships between code entities (calls, imports, dependencies)
    - Works with multiple languages (Rust, Python, JavaScript)
 
-2. **Natural Language Querying**
-   - Query your codebase using plain English
-   - Find entities, relationships, and domain concepts
-   - Examples: "Show functions that use the database", "What calls the authenticate method?"
+2. **Advanced Querying System**
+   - Query your codebase using natural language or precise grep-like flags
+   - Find entities, relationships, and domain concepts with tiered processing:
+     - Direct knowledge graph queries for common patterns
+     - Pattern-based queries for structured requests
+     - LLM-powered analysis for complex semantic questions
+   - Efficient filtering with type, path, and exact matching options
+   - Examples: "Show functions that use the database", "find api --type-filter function --path src/auth"
 
 3. **Domain Model Extraction**
    - Uses LLMs to identify business entities and concepts
@@ -63,6 +67,21 @@ ummon query "show all authentication functions"
 
 # Query with JSON output
 ummon query "show all authentication functions" --format json
+
+# Filter query results by entity type
+ummon query "find api" --type-filter function
+
+# Filter by file path pattern
+ummon query "show all entities" --path src/auth
+
+# Limit the number of results
+ummon query "list functions" --limit 10
+
+# Use exact matching only (no partial matches)
+ummon query "find user" --exact
+
+# Skip LLM processing for faster results
+ummon query "show authentication logic" --no-llm
 
 # Generate AI-assisted recommendations
 ummon assist "implement a user registration function"

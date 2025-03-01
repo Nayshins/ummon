@@ -37,6 +37,26 @@ pub enum Commands {
         /// Output format (text, json)
         #[arg(long, short, default_value = "text")]
         format: String,
+
+        /// Filter results by type (function, method, class, etc.)
+        #[arg(long, short)]
+        type_filter: Option<String>,
+
+        /// Filter results by file path pattern
+        #[arg(long, short = 'p')]
+        path: Option<String>,
+
+        /// Include exact ID matches only
+        #[arg(long, short)]
+        exact: bool,
+
+        /// Maximum number of results to return
+        #[arg(long, short, default_value = "20")]
+        limit: usize,
+
+        /// Skip LLM and only use direct knowledge graph queries
+        #[arg(long)]
+        no_llm: bool,
     },
 
     /// Generate AI-assisted recommendations

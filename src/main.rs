@@ -29,7 +29,26 @@ async fn main() -> Result<()> {
             enable_domain_extraction,
             domain_dir,
         } => commands::index::run(&path, enable_domain_extraction, &domain_dir).await?,
-        cli::Commands::Query { query, format } => commands::query::run(&query, &format).await?,
+        cli::Commands::Query {
+            query,
+            format,
+            type_filter,
+            path,
+            exact,
+            limit,
+            no_llm,
+        } => {
+            commands::query::run(
+                &query,
+                &format,
+                type_filter.as_deref(),
+                path.as_deref(),
+                exact,
+                limit,
+                no_llm,
+            )
+            .await?
+        }
         cli::Commands::Assist { instruction } => commands::assist::run(&instruction)?,
         cli::Commands::Serve { transport } => commands::serve::run(&transport).await?,
     }
