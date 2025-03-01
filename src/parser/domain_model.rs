@@ -42,16 +42,23 @@ pub enum RelationType {
 }
 
 pub trait DomainModelBuilder {
-    fn extract_domain_model(&self, content: &str, file_path: &str) -> Result<Vec<DomainEntity>>;
+    async fn extract_domain_model(
+        &self,
+        content: &str,
+        file_path: &str,
+    ) -> Result<Vec<DomainEntity>>;
 }
 
 /// Builds a domain model using an LLM
 pub struct LlmDomainModelBuilder {}
 
 impl DomainModelBuilder for LlmDomainModelBuilder {
-    fn extract_domain_model(&self, _content: &str, _file_path: &str) -> Result<Vec<DomainEntity>> {
-        // This implementation will be async in the actual code
-        // Here we're just defining the interface
+    async fn extract_domain_model(
+        &self,
+        _content: &str,
+        _file_path: &str,
+    ) -> Result<Vec<DomainEntity>> {
+        // This is just a placeholder implementation
         Ok(Vec::new())
     }
 }

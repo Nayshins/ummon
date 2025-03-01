@@ -14,9 +14,24 @@ use crate::parser::language_support::{
 };
 
 /// Main entry point for the indexing command
-pub async fn run(path: &str, enable_domain_extraction: bool, domain_dir: &str) -> Result<()> {
+pub async fn run(
+    path: &str,
+    enable_domain_extraction: bool,
+    domain_dir: &str,
+    llm_provider: Option<&str>,
+    llm_model: Option<&str>,
+) -> Result<()> {
     println!("Indexing code at path: {}", path);
     let start_time = Instant::now();
+
+    // Set environment variables for the LLM provider and model if specified
+    if let Some(provider) = llm_provider {
+        std::env::set_var("LLM_PROVIDER", provider);
+    }
+
+    if let Some(model) = llm_model {
+        std::env::set_var("LLM_MODEL", model);
+    }
 
     let mut kg = KnowledgeGraph::new();
     let mut function_map: HashMap<String, FunctionDefinition> = HashMap::new();
@@ -55,7 +70,8 @@ pub async fn run(path: &str, enable_domain_extraction: bool, domain_dir: &str) -
         &mut domain_concepts,
         enable_domain_extraction,
         domain_dir,
-    )?;
+    )
+    .await?;
 
     let duration = start_time.elapsed();
     kg.save_to_file("knowledge_graph.json")?;
@@ -394,7 +410,7 @@ fn index_relationships(
 }
 
 /// Third pass: Infer domain model from code entities
-fn infer_domain_model(
+async fn infer_domain_model(
     kg: &mut KnowledgeGraph,
     domain_concepts: &mut HashMap<String, DomainConcept>,
     enable_domain_extraction: bool,
@@ -524,8 +540,8 @@ fn infer_domain_model(
                 continue;
             }
 
-            // Extract domain entities using LLM
-            let domain_entities = match extractor.extract_domain_model(&content, &file_path) {
+            // Extract domain entities using LLM (with await)
+            let domain_entities = match extractor.extract_domain_model(&content, &file_path).await {
                 Ok(entities) => entities,
                 Err(e) => {
                     println!("  Error extracting domain entities: {}", e);

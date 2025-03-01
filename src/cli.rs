@@ -27,6 +27,14 @@ pub enum Commands {
         /// Directory to analyze for domain extraction (defaults to src/)
         #[arg(long, default_value = "src")]
         domain_dir: String,
+
+        /// LLM provider to use for domain extraction
+        #[arg(long, value_enum, default_value = "openrouter")]
+        llm_provider: Option<String>,
+
+        /// LLM model to use
+        #[arg(long)]
+        llm_model: Option<String>,
     },
 
     /// Query the knowledge graph using natural language
@@ -57,12 +65,28 @@ pub enum Commands {
         /// Skip LLM and only use direct knowledge graph queries
         #[arg(long)]
         no_llm: bool,
+
+        /// LLM provider to use for querying
+        #[arg(long, value_enum, default_value = "openrouter")]
+        llm_provider: Option<String>,
+
+        /// LLM model to use
+        #[arg(long)]
+        llm_model: Option<String>,
     },
 
     /// Generate AI-assisted recommendations
     Assist {
         /// User instruction (e.g., "implement a user registration function")
         instruction: String,
+
+        /// LLM provider to use for assistance
+        #[arg(long, value_enum, default_value = "openrouter")]
+        llm_provider: Option<String>,
+
+        /// LLM model to use
+        #[arg(long)]
+        llm_model: Option<String>,
     },
 
     /// Start an MCP server for AI agent interaction

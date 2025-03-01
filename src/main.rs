@@ -28,7 +28,18 @@ async fn main() -> Result<()> {
             path,
             enable_domain_extraction,
             domain_dir,
-        } => commands::index::run(&path, enable_domain_extraction, &domain_dir).await?,
+            llm_provider,
+            llm_model,
+        } => {
+            commands::index::run(
+                &path,
+                enable_domain_extraction,
+                &domain_dir,
+                llm_provider.as_deref(),
+                llm_model.as_deref(),
+            )
+            .await?
+        }
         cli::Commands::Query {
             query,
             format,
@@ -37,6 +48,8 @@ async fn main() -> Result<()> {
             exact,
             limit,
             no_llm,
+            llm_provider,
+            llm_model,
         } => {
             commands::query::run(
                 &query,
@@ -46,10 +59,19 @@ async fn main() -> Result<()> {
                 exact,
                 limit,
                 no_llm,
+                llm_provider.as_deref(),
+                llm_model.as_deref(),
             )
             .await?
         }
-        cli::Commands::Assist { instruction } => commands::assist::run(&instruction)?,
+        cli::Commands::Assist {
+            instruction,
+            llm_provider,
+            llm_model,
+        } => {
+            commands::assist::run(&instruction, llm_provider.as_deref(), llm_model.as_deref())
+                .await?
+        }
         cli::Commands::Serve { transport } => commands::serve::run(&transport).await?,
     }
 
