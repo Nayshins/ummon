@@ -38,3 +38,4 @@ The test skeletons are commented out to avoid compilation issues, and need to be
 - **Documentation**: Include doc comments for public API functions
 - **Formatting**: Follow Rust style guidelines with 4-space indentation
 - **Modules**: Organize code in modules by functionality (parser, graph, commands)
+- **Warnings**: Do not check in new warnings

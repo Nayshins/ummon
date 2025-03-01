@@ -1312,41 +1312,44 @@ impl Clone for UmmonRouter {
 
 #[cfg(test)]
 mod tests {
-    
-    use serde_json::json;
+
     use async_trait::async_trait;
+    use serde_json::json;
     use std::future::Future;
     use std::pin::Pin;
 
-    
-    use crate::mcp_core::{Content, ToolError, Router, Tool, Resource, ResourceError, ServerCapabilities, CapabilitiesBuilder};
-    
+    use crate::mcp_core::{
+        CapabilitiesBuilder, Content, Resource, ResourceError, Router, ServerCapabilities, Tool,
+        ToolError,
+    };
+
     // Create a mock router for testing
     struct MockRouter {}
-    
+
     #[async_trait]
     impl Router for MockRouter {
         fn name(&self) -> String {
             "MockRouter".to_string()
         }
-        
+
         fn instructions(&self) -> String {
             "Mock instructions".to_string()
         }
-        
+
         fn capabilities(&self) -> ServerCapabilities {
             CapabilitiesBuilder::new().build()
         }
-        
+
         fn list_tools(&self) -> Vec<Tool> {
             vec![]
         }
-        
+
         fn call_tool(
             &self,
             tool_name: &str,
             _arguments: serde_json::Value,
-        ) -> Pin<Box<dyn Future<Output = Result<Vec<Content>, ToolError>> + Send + 'static>> {
+        ) -> Pin<Box<dyn Future<Output = Result<Vec<Content>, ToolError>> + Send + 'static>>
+        {
             // Return different test content based on the tool name
             let result = match tool_name {
                 "search_code" => {
@@ -1372,14 +1375,14 @@ mod tests {
                 },
                 _ => Err(ToolError::NotFound(tool_name.to_string())),
             };
-            
+
             Box::pin(async move { result })
         }
-        
+
         fn list_resources(&self) -> Vec<Resource> {
             vec![]
         }
-        
+
         fn read_resource(
             &self,
             uri: &str,
@@ -1387,7 +1390,7 @@ mod tests {
             let uri = uri.to_string();
             Box::pin(async move { Err(ResourceError::NotFound(uri)) })
         }
-        
+
         fn write_resource(
             &self,
             uri: &str,
@@ -1401,84 +1404,114 @@ mod tests {
     #[tokio::test]
     async fn test_search_code_tool() {
         let router = MockRouter {};
-        
+
         // Test search for "test"
         let args = json!({
             "query": "test"
         });
-        
+
         let result = router.call_tool("search_code", args).await;
         assert!(result.is_ok(), "Search tool should return Ok result");
-        
+
         let content = result.unwrap();
         assert!(!content.is_empty(), "Search result should not be empty");
-        
+
         if let Content::Text(text) = &content[0] {
-            assert!(text.contains("Found"), "Search result should contain 'Found'");
-            assert!(text.contains("TestFunction"), "Search result should contain 'TestFunction'");
+            assert!(
+                text.contains("Found"),
+                "Search result should contain 'Found'"
+            );
+            assert!(
+                text.contains("TestFunction"),
+                "Search result should contain 'TestFunction'"
+            );
         } else {
             panic!("Search result should be text content");
         }
     }
-    
+
     #[tokio::test]
     async fn test_get_entity_tool() {
         let router = MockRouter {};
-        
+
         // Test get entity
         let args = json!({
             "entity_id": "entity_1"
         });
-        
+
         let result = router.call_tool("get_entity", args).await;
         assert!(result.is_ok(), "Get entity tool should return Ok result");
-        
+
         let content = result.unwrap();
         assert!(!content.is_empty(), "Get entity result should not be empty");
-        
+
         if let Content::Text(text) = &content[0] {
-            assert!(text.contains("TestFunction"), "Entity result should contain entity name");
-            assert!(text.contains("entity_1"), "Entity result should contain entity ID");
-            assert!(text.contains("Function"), "Entity result should contain entity type");
+            assert!(
+                text.contains("TestFunction"),
+                "Entity result should contain entity name"
+            );
+            assert!(
+                text.contains("entity_1"),
+                "Entity result should contain entity ID"
+            );
+            assert!(
+                text.contains("Function"),
+                "Entity result should contain entity type"
+            );
         } else {
             panic!("Entity result should be text content");
         }
     }
-    
+
     #[tokio::test]
     async fn test_debug_graph_tool() {
         let router = MockRouter {};
-        
+
         let result = router.call_tool("debug_graph", json!({})).await;
         assert!(result.is_ok(), "Debug graph tool should return Ok result");
-        
+
         let content = result.unwrap();
-        assert!(!content.is_empty(), "Debug graph result should not be empty");
-        
+        assert!(
+            !content.is_empty(),
+            "Debug graph result should not be empty"
+        );
+
         if let Content::Text(text) = &content[0] {
-            assert!(text.contains("Total entities: 3"), "Debug result should show correct entity count");
-            assert!(text.contains("Total relationships: 2"), "Debug result should show correct relationship count");
+            assert!(
+                text.contains("Total entities: 3"),
+                "Debug result should show correct entity count"
+            );
+            assert!(
+                text.contains("Total relationships: 2"),
+                "Debug result should show correct relationship count"
+            );
         } else {
             panic!("Debug result should be text content");
         }
     }
-    
+
     #[tokio::test]
     async fn test_find_relevant_files_tool() {
         let router = MockRouter {};
-        
+
         // Test find relevant files
         let args = json!({
             "description": "test function",
             "limit": 2
         });
-        
+
         let result = router.call_tool("find_relevant_files", args).await;
-        assert!(result.is_ok(), "Find relevant files tool should return Ok result");
-        
+        assert!(
+            result.is_ok(),
+            "Find relevant files tool should return Ok result"
+        );
+
         let content = result.unwrap();
-        assert!(!content.is_empty(), "Find relevant files result should not be empty");
-        
+        assert!(
+            !content.is_empty(),
+            "Find relevant files result should not be empty"
+        );
+
         if let Content::Text(text) = &content[0] {
             assert!(text.contains("Found"), "Result should contain 'Found'");
             assert!(text.contains("test.rs"), "Result should contain 'test.rs'");
@@ -1486,62 +1519,92 @@ mod tests {
             panic!("Result should be text content");
         }
     }
-    
+
     #[tokio::test]
     async fn test_explore_relationships_tool() {
         let router = MockRouter {};
-        
+
         // Test explore relationships
         let args = json!({
             "entity_id": "entity_1",
             "depth": 1
         });
-        
+
         let result = router.call_tool("explore_relationships", args).await;
-        assert!(result.is_ok(), "Explore relationships tool should return Ok result");
-        
+        assert!(
+            result.is_ok(),
+            "Explore relationships tool should return Ok result"
+        );
+
         let content = result.unwrap();
-        assert!(!content.is_empty(), "Explore relationships result should not be empty");
-        
+        assert!(
+            !content.is_empty(),
+            "Explore relationships result should not be empty"
+        );
+
         if let Content::Text(text) = &content[0] {
-            assert!(text.contains("TestFunction"), "Result should contain entity name");
-            assert!(text.contains("Calls"), "Result should contain relationship type");
-            assert!(text.contains("TestClass"), "Result should contain related entity");
+            assert!(
+                text.contains("TestFunction"),
+                "Result should contain entity name"
+            );
+            assert!(
+                text.contains("Calls"),
+                "Result should contain relationship type"
+            );
+            assert!(
+                text.contains("TestClass"),
+                "Result should contain related entity"
+            );
         } else {
             panic!("Result should be text content");
         }
     }
-    
+
     #[tokio::test]
     async fn test_explain_architecture_tool() {
         let router = MockRouter {};
-        
+
         // Test explain architecture
         let args = json!({
             "detail_level": "low"
         });
-        
+
         let result = router.call_tool("explain_architecture", args).await;
-        assert!(result.is_ok(), "Explain architecture tool should return Ok result");
-        
+        assert!(
+            result.is_ok(),
+            "Explain architecture tool should return Ok result"
+        );
+
         let content = result.unwrap();
-        assert!(!content.is_empty(), "Explain architecture result should not be empty");
-        
+        assert!(
+            !content.is_empty(),
+            "Explain architecture result should not be empty"
+        );
+
         if let Content::Text(text) = &content[0] {
-            assert!(text.contains("Codebase Architecture"), "Result should contain architecture title");
-            assert!(text.contains("Module Structure"), "Result should contain module structure section");
+            assert!(
+                text.contains("Codebase Architecture"),
+                "Result should contain architecture title"
+            );
+            assert!(
+                text.contains("Module Structure"),
+                "Result should contain module structure section"
+            );
         } else {
             panic!("Result should be text content");
         }
     }
-    
+
     #[tokio::test]
     async fn test_tool_error_handling() {
         let router = MockRouter {};
-        
+
         // Test invalid tool name
         let args = json!({});
         let result = router.call_tool("invalid_tool", args).await;
-        assert!(matches!(result, Err(ToolError::NotFound(_))), "Should return NotFound error");
+        assert!(
+            matches!(result, Err(ToolError::NotFound(_))),
+            "Should return NotFound error"
+        );
     }
 }
