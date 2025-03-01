@@ -1,5 +1,18 @@
 # Ummon
 
+```
+██╗   ██╗███╗   ███╗███╗   ███╗ ██████╗ ███╗   ██╗
+██║   ██║████╗ ████║████╗ ████║██╔═══██╗████╗  ██║
+██║   ██║██╔████╔██║██╔████╔██║██║   ██║██╔██╗ ██║
+██║   ██║██║╚██╔╝██║██║╚██╔╝██║██║   ██║██║╚██╗██║
+╚██████╔╝██║ ╚═╝ ██║██║ ╚═╝ ██║╚██████╔╝██║ ╚████║
+ ╚═════╝ ╚═╝     ╚═╝╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═══╝
+
+"WHAT ARE THE ACTIVITIES OF A SYSTEM?
+ I HAVE NOT THE SLIGHTEST IDEA.
+ THE PATH APPEARS"
+```
+
 > **⚠️ WARNING: This project is in early development and is not yet stable. APIs and functionality may change significantly between versions.**
 
 Ummon is a code analysis tool that builds knowledge graphs from codebases to enhance understanding, improve AI assistance, and enable sophisticated querying. It creates connections between code entities (functions, classes, modules) and domain concepts, making it easier to reason about complex software systems.
