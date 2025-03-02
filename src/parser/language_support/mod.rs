@@ -8,6 +8,7 @@ use std::sync::Mutex;
 pub use crate::graph::entity::{Location, Parameter, Position, Visibility};
 
 pub mod javascript;
+pub mod java;
 pub mod python;
 pub mod rust;
 
@@ -103,6 +104,7 @@ static LANGUAGE_PARSERS: Lazy<Mutex<Vec<Box<dyn LanguageParser + Send>>>> = Lazy
         Box::new(rust::RustParser::new()),
         Box::new(python::PythonParser::new()),
         Box::new(javascript::JavaScriptParser::new()),
+        Box::new(java::JavaParser::new()),
     ])
 });
 

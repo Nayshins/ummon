@@ -22,7 +22,7 @@ Named after the AI Ummon from Dan Simmons' Hyperion Cantos, this project provide
 1. **Knowledge Graph Construction**
    - Indexes code to create a semantic representation
    - Maps relationships between code entities (calls, imports, dependencies)
-   - Works with multiple languages (Rust, Python, JavaScript)
+   - Works with multiple languages (Rust, Python, JavaScript, Java)
 
 2. **Advanced Querying System**
    - Query your codebase using natural language or precise grep-like flags
@@ -130,6 +130,24 @@ Ummon is built with a modular architecture:
 - LLM integration for semantic understanding
 - Command-line interface for user interaction
 - MCP server for AI agent integration
+
+### Language Support
+
+Ummon supports parsing and analysis of multiple programming languages:
+
+- **Rust**: Class/structs, traits, implementations, functions, modules
+- **Python**: Classes, functions, decorators, imports
+- **JavaScript**: Classes, functions, arrow functions, imports
+- **Java**: Classes, interfaces, methods, constructors, fields
+
+The Java parser supports parsing of:
+- Class and interface definitions with modifiers
+- Constructor declarations
+- Method declarations with parameter types
+- Field declarations with types
+- Package declarations and imports (including wildcard and static imports)
+- Documentation comments extraction
+- Method calls and relationships
 
 ## Development
 
