@@ -7,8 +7,8 @@ use std::sync::Mutex;
 // Re-export these types for use by language parsers
 pub use crate::graph::entity::{Location, Parameter, Position, Visibility};
 
-pub mod javascript;
 pub mod java;
+pub mod javascript;
 pub mod python;
 pub mod rust;
 

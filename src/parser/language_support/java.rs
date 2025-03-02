@@ -111,7 +111,7 @@ impl JavaParser {
                 }
             }
         }
-        
+
         // Default visibility in Java is package-private, map to Protected
         Visibility::Protected
     }
@@ -133,7 +133,7 @@ impl JavaParser {
 
     fn extract_parameters(&self, node: Node, content: &str) -> Vec<Parameter> {
         let mut parameters = Vec::new();
-        
+
         if let Some(params_node) = node.child_by_field_name("parameters") {
             if params_node.kind() == "formal_parameters" {
                 for i in 0..params_node.child_count() {
@@ -143,14 +143,17 @@ impl JavaParser {
                             if let Some(name_node) = param_node.child_by_field_name("name") {
                                 if let Ok(param_name) = name_node.utf8_text(content.as_bytes()) {
                                     let mut type_annotation = None;
-                                    
+
                                     // Get parameter type
-                                    if let Some(type_node) = param_node.child_by_field_name("type") {
-                                        if let Ok(type_text) = type_node.utf8_text(content.as_bytes()) {
+                                    if let Some(type_node) = param_node.child_by_field_name("type")
+                                    {
+                                        if let Ok(type_text) =
+                                            type_node.utf8_text(content.as_bytes())
+                                        {
                                             type_annotation = Some(type_text.to_string());
                                         }
                                     }
-                                    
+
                                     parameters.push(Parameter {
                                         name: param_name.to_string(),
                                         type_annotation,
@@ -163,7 +166,7 @@ impl JavaParser {
                 }
             }
         }
-        
+
         parameters
     }
 
@@ -173,19 +176,20 @@ impl JavaParser {
         content: &str,
         file_path: &str,
     ) -> Option<TypeDefinition> {
-        if node.kind() != "class_declaration" && 
-           node.kind() != "interface_declaration" && 
-           node.kind() != "enum_declaration" {
+        if node.kind() != "class_declaration"
+            && node.kind() != "interface_declaration"
+            && node.kind() != "enum_declaration"
+        {
             return None;
         }
-        
+
         // Get type name
         let name = node
             .child_by_field_name("name")?
             .utf8_text(content.as_bytes())
             .ok()?
             .to_string();
-            
+
         // Determine type kind
         let kind = match node.kind() {
             "class_declaration" => TypeKind::Class,
@@ -193,10 +197,10 @@ impl JavaParser {
             "enum_declaration" => TypeKind::Enum,
             _ => TypeKind::Unknown,
         };
-        
+
         // Extract super types (extends, implements)
         let mut super_types = Vec::new();
-        
+
         // Handle extends
         if let Some(extends_node) = node.child_by_field_name("superclass") {
             if let Some(type_node) = extends_node.child(0) {
@@ -205,7 +209,7 @@ impl JavaParser {
                 }
             }
         }
-        
+
         // Handle implements
         if let Some(implements_node) = node.child_by_field_name("interfaces") {
             for i in 0..implements_node.child_count() {
@@ -224,13 +228,13 @@ impl JavaParser {
                 }
             }
         }
-        
+
         // Extract visibility
         let visibility = self.extract_type_visibility(node, content);
-        
+
         // Extract fields
         let fields = self.extract_fields(node, content);
-        
+
         // Extract method names (for reference)
         let mut methods = Vec::new();
         self.traverse_node(node, &mut |n| {
@@ -242,10 +246,12 @@ impl JavaParser {
                 }
             }
         });
-        
+
         // Extract documentation comments
-        let documentation = self.extract_documentation(content, &self.extract_location(node)).unwrap_or(None);
-        
+        let documentation = self
+            .extract_documentation(content, &self.extract_location(node))
+            .unwrap_or(None);
+
         Some(TypeDefinition {
             name,
             file_path: file_path.to_string(),
@@ -258,7 +264,7 @@ impl JavaParser {
             documentation,
         })
     }
-    
+
     fn extract_type_visibility(&self, node: Node, content: &str) -> Visibility {
         // In Java, classes have modifiers like public, private, protected
         if let Some(modifiers) = node.child_by_field_name("modifiers") {
@@ -275,14 +281,14 @@ impl JavaParser {
                 }
             }
         }
-        
+
         // Default visibility in Java is package-private, map to Protected
         Visibility::Protected
     }
-    
+
     fn extract_fields(&self, node: Node, content: &str) -> Vec<FieldDefinition> {
         let mut fields = Vec::new();
-        
+
         self.traverse_node(node, &mut |n| {
             if n.kind() == "field_declaration" {
                 // Java field declaration can contain multiple variables
@@ -294,7 +300,7 @@ impl JavaParser {
                             type_annotation = Some(type_text.to_string());
                         }
                     }
-                    
+
                     // Check if field is static
                     let mut is_static = false;
                     if let Some(modifiers) = n.child_by_field_name("modifiers") {
@@ -309,14 +315,14 @@ impl JavaParser {
                             }
                         }
                     }
-                    
+
                     // Get visibility
                     let visibility = self.extract_visibility(n, content);
-                    
+
                     // Clone values that will be captured by the closure
                     let vis_clone = visibility.clone();
                     let is_static_clone = is_static;
-                    
+
                     // Process each variable declarator
                     self.traverse_node(declarator_list, &mut |var_node| {
                         if var_node.kind() == "variable_declarator" {
@@ -324,12 +330,15 @@ impl JavaParser {
                                 if let Ok(field_name) = name_node.utf8_text(content.as_bytes()) {
                                     // Check for default value
                                     let mut default_value = None;
-                                    if let Some(value_node) = var_node.child_by_field_name("value") {
-                                        if let Ok(value_text) = value_node.utf8_text(content.as_bytes()) {
+                                    if let Some(value_node) = var_node.child_by_field_name("value")
+                                    {
+                                        if let Ok(value_text) =
+                                            value_node.utf8_text(content.as_bytes())
+                                        {
                                             default_value = Some(value_text.to_string());
                                         }
                                     }
-                                    
+
                                     fields.push(FieldDefinition {
                                         name: field_name.to_string(),
                                         type_annotation: type_annotation.clone(),
@@ -345,7 +354,7 @@ impl JavaParser {
                 }
             }
         });
-        
+
         fields
     }
 }
@@ -413,14 +422,14 @@ impl LanguageParser for JavaParser {
                 if let Some(name_node) = node.child_by_field_name("name") {
                     if let Ok(name) = name_node.utf8_text(content.as_bytes()) {
                         let mut fully_qualified_name = None;
-                        
+
                         // Check if there's an object reference for this method call
                         if let Some(object_node) = node.child_by_field_name("object") {
                             if let Ok(object_name) = object_node.utf8_text(content.as_bytes()) {
                                 fully_qualified_name = Some(format!("{}.{}", object_name, name));
                             }
                         }
-                        
+
                         // Extract arguments
                         let mut arguments = Vec::new();
                         if let Some(args_node) = node.child_by_field_name("arguments") {
@@ -432,7 +441,7 @@ impl LanguageParser for JavaParser {
                                 }
                             }
                         }
-                        
+
                         calls.push(CallReference {
                             caller_location: self.extract_location(node),
                             callee_name: name.to_string(),
@@ -446,7 +455,7 @@ impl LanguageParser for JavaParser {
 
         Ok(calls)
     }
-    
+
     fn parse_modules(&mut self, content: &str, file_path: &str) -> Result<ModuleDefinition> {
         let tree = self
             .parser
@@ -454,7 +463,7 @@ impl LanguageParser for JavaParser {
             .ok_or_else(|| anyhow::anyhow!("Failed to parse Java code"))?;
 
         let root_node = tree.root_node();
-        
+
         // Create a basic module definition
         let mut module_def = ModuleDefinition {
             name: Path::new(file_path)
@@ -467,7 +476,7 @@ impl LanguageParser for JavaParser {
             exports: Vec::new(),
             documentation: None,
         };
-        
+
         // Extract package name
         for i in 0..root_node.child_count() {
             if let Some(child) = root_node.child(i) {
@@ -480,14 +489,14 @@ impl LanguageParser for JavaParser {
                 }
             }
         }
-        
+
         // Extract imports
         self.traverse_node(root_node, &mut |node| {
             if node.kind() == "import_declaration" {
                 if let Some(name_node) = node.child_by_field_name("name") {
                     if let Ok(import_name) = name_node.utf8_text(content.as_bytes()) {
                         let is_relative = import_name.starts_with(".");
-                        
+
                         // Check if it's a wildcard import
                         let mut imported_symbols = Vec::new();
                         if import_name.ends_with(".*") {
@@ -500,7 +509,7 @@ impl LanguageParser for JavaParser {
                                 imported_symbols.push(import_name.to_string());
                             }
                         }
-                        
+
                         module_def.imports.push(ImportDefinition {
                             module_name: import_name.to_string(),
                             imported_symbols,
@@ -511,13 +520,13 @@ impl LanguageParser for JavaParser {
                 }
             }
         });
-        
+
         // Extract public class/interface names as exports
         self.traverse_node(root_node, &mut |node| {
-            if node.kind() == "class_declaration" || 
-               node.kind() == "interface_declaration" || 
-               node.kind() == "enum_declaration" {
-                
+            if node.kind() == "class_declaration"
+                || node.kind() == "interface_declaration"
+                || node.kind() == "enum_declaration"
+            {
                 // Check if the class is public
                 let mut is_public = false;
                 if let Some(modifiers) = node.child_by_field_name("modifiers") {
@@ -532,7 +541,7 @@ impl LanguageParser for JavaParser {
                         }
                     }
                 }
-                
+
                 // If public, add to exports
                 if is_public {
                     if let Some(name_node) = node.child_by_field_name("name") {
@@ -543,35 +552,35 @@ impl LanguageParser for JavaParser {
                 }
             }
         });
-        
+
         Ok(module_def)
     }
-    
+
     fn extract_documentation(&self, content: &str, location: &Location) -> Result<Option<String>> {
         // In Java, documentation comments start with /** and end with */
         // We need to look for documentation before the entity
         let lines: Vec<&str> = content.lines().collect();
-        
+
         // The entity starts at this line
         let start_line = location.start.line as usize;
-        
+
         // Check for out of bounds
         if start_line >= lines.len() || start_line == 0 {
             return Ok(None);
         }
-        
+
         // Look for documentation comments above the entity
         let mut doc_lines = Vec::new();
         let mut in_doc_comment = false;
         let mut doc_end_line = 0;
-        
+
         // Safe subset of lines to search
         let search_range = if start_line > 10 { start_line - 10 } else { 0 }..start_line;
-        
+
         // Iterate through previous lines to find documentation comments
         for i in (search_range).rev() {
             let trimmed = lines[i].trim();
-            
+
             if trimmed.ends_with("*/") {
                 in_doc_comment = true;
                 doc_end_line = i;
@@ -591,15 +600,17 @@ impl LanguageParser for JavaParser {
                 if !comment_text.is_empty() || !doc_lines.is_empty() {
                     doc_lines.push(comment_text.to_string());
                 }
-            } else if doc_end_line > 0 && i < doc_end_line - 1 || (doc_end_line == 0 && !trimmed.is_empty()) {
+            } else if doc_end_line > 0 && i < doc_end_line - 1
+                || (doc_end_line == 0 && !trimmed.is_empty())
+            {
                 // We've reached non-documentation, non-whitespace content before finding start of comment
                 break;
             }
         }
-        
+
         // Reverse the lines since we collected them in reverse order
         doc_lines.reverse();
-        
+
         if doc_lines.is_empty() {
             Ok(None)
         } else {
@@ -638,19 +649,19 @@ public class TestClass {
 "#;
 
         let mut parser = JavaParser::new();
-        
+
         // Test function parsing
         let functions = parser.parse_functions(java_code, "Test.java").unwrap();
         assert!(functions.len() > 0);
-        
+
         // Test types parsing
         let types = parser.parse_types(java_code, "Test.java").unwrap();
         assert!(types.len() > 0);
-        
+
         // Basic module parsing
         let module = parser.parse_modules(java_code, "Test.java").unwrap();
         assert_eq!(module.path, "Test.java");
-        
+
         // Test that can_handle correctly identifies Java files
         assert!(parser.can_handle(Path::new("test.java")));
         assert!(!parser.can_handle(Path::new("test.py")));
