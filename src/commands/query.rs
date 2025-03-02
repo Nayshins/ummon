@@ -109,7 +109,7 @@ pub async fn run(
     llm_provider: Option<&str>,
     llm_model: Option<&str>,
 ) -> Result<()> {
-    println!("Querying knowledge graph: {}", instruction);
+    tracing::info!("Querying knowledge graph: {}", instruction);
 
     // Load the KG
     let kg = KnowledgeGraph::load_from_file("knowledge_graph.json")?;

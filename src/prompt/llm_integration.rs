@@ -74,8 +74,8 @@ pub async fn query_llm(prompt: &str, config: &LlmConfig) -> Result<String> {
         .to_string());
     }
 
-    println!(
-        "  Sending LLM request to {:?} for domain extraction...",
+    tracing::info!(
+        "Sending LLM request to {:?} for domain extraction...",
         config.provider
     );
 
@@ -92,7 +92,7 @@ pub async fn query_llm(prompt: &str, config: &LlmConfig) -> Result<String> {
 
     loop {
         attempt += 1;
-        println!("  LLM API call attempt {}/{}", attempt, max_retries);
+        tracing::info!("LLM API call attempt {}/{}", attempt, max_retries);
 
         match try_llm_query(&client, config, &body).await {
             Ok(result) => return Ok(result),
@@ -106,7 +106,7 @@ pub async fn query_llm(prompt: &str, config: &LlmConfig) -> Result<String> {
                 }
                 // Exponential backoff
                 let backoff = Duration::from_millis(500 * 2u64.pow(attempt as u32 - 1));
-                println!("  LLM API call failed: {}. Retrying in {:?}...", e, backoff);
+                tracing::warn!("LLM API call failed: {}. Retrying in {:?}...", e, backoff);
                 tokio::time::sleep(backoff).await;
             }
         }

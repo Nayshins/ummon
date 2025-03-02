@@ -19,12 +19,9 @@ impl LlmModelExtractor {
         if let Ok(provider_str) = env::var("LLM_PROVIDER") {
             if let Ok(provider) = LlmProvider::from_str(&provider_str) {
                 config.provider = provider;
-                println!("Using LLM provider: {:?}", provider);
+                tracing::info!("Using LLM provider: {:?}", provider);
             } else {
-                println!(
-                    "Warning: Unknown LLM provider '{}', using default",
-                    provider_str
-                );
+                tracing::warn!("Unknown LLM provider '{}', using default", provider_str);
             }
         }
 
@@ -44,14 +41,14 @@ impl LlmModelExtractor {
                 || config.provider == LlmProvider::Ollama
                 || config.provider == LlmProvider::Mock
             {
-                println!(
+                tracing::info!(
                     "Found API key for {:?}, LLM domain extraction enabled",
                     config.provider
                 );
                 config.api_key = key;
             }
         } else {
-            println!(
+            tracing::warn!(
                 "{:?} API key not set, using mock domain entities",
                 config.provider
             );
@@ -61,7 +58,7 @@ impl LlmModelExtractor {
         if let Ok(endpoint) = env::var("LLM_ENDPOINT") {
             if !endpoint.is_empty() {
                 config.endpoint_url = Some(endpoint);
-                println!("Using custom LLM endpoint");
+                tracing::info!("Using custom LLM endpoint");
             }
         }
 
@@ -69,7 +66,7 @@ impl LlmModelExtractor {
         if let Ok(model) = env::var("LLM_MODEL") {
             if !model.is_empty() {
                 config.model = model;
-                println!("Using custom LLM model: {}", config.model);
+                tracing::info!("Using custom LLM model: {}", config.model);
             }
         }
 
@@ -90,8 +87,8 @@ impl DomainModelBuilder for LlmModelExtractor {
         };
 
         if needs_api_key && self.config.api_key.is_empty() {
-            println!(
-                "  Note: Using mock domain entity (API key not set) for {}",
+            tracing::info!(
+                "Using mock domain entity (API key not set) for {}",
                 file_path
             );
 
@@ -117,7 +114,7 @@ impl DomainModelBuilder for LlmModelExtractor {
 
         // Truncate content if it's too long (limit to ~10k chars to avoid token limits)
         let truncated_content = if content.len() > 10000 {
-            println!("  Note: Content too large, truncating for LLM analysis");
+            tracing::info!("Content too large, truncating for LLM analysis");
             // Take the first 8k and last 2k characters to capture more of the important structure
             // Usually class/type definitions are at the beginning of files
             let first_size = 8000.min(content.len());
@@ -138,12 +135,10 @@ impl DomainModelBuilder for LlmModelExtractor {
         // Create a prompt for the LLM
         let prompt = build_domain_extraction_prompt(&truncated_content, file_path);
 
-        if std::env::var("RUST_LOG").is_ok() {
-            println!(
-                "  Sending request to {:?} for domain extraction...",
-                self.config.provider
-            );
-        }
+        tracing::info!(
+            "Sending request to {:?} for domain extraction...",
+            self.config.provider
+        );
 
         // Directly use await since we're in an async function now
         match crate::prompt::llm_integration::query_llm(&prompt, &self.config).await {
@@ -161,20 +156,20 @@ impl DomainModelBuilder for LlmModelExtractor {
                         }
 
                         if domain_entities.is_empty() {
-                            println!("  Warning: No valid entities parsed from LLM response");
+                            tracing::warn!("No valid entities parsed from LLM response");
                             create_mock_entity(file_path)
                         } else {
                             Ok(domain_entities)
                         }
                     }
                     Err(e) => {
-                        println!("  Error parsing LLM response as JSON: {}", e);
+                        tracing::error!("Error parsing LLM response as JSON: {}", e);
                         create_mock_entity(file_path)
                     }
                 }
             }
             Err(e) => {
-                println!("  Error calling LLM API: {}", e);
+                tracing::error!("Error calling LLM API: {}", e);
                 create_mock_entity(file_path)
             }
         }
@@ -182,7 +177,7 @@ impl DomainModelBuilder for LlmModelExtractor {
 }
 
 fn create_mock_entity(file_path: &str) -> Result<Vec<DomainEntity>> {
-    println!("  Using mock domain entity for {}", file_path);
+    tracing::info!("Using mock domain entity for {}", file_path);
     let file_name = file_path.split('/').last().unwrap_or("unknown");
 
     // Generate domain entity based on the file name

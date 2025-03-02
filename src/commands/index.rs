@@ -21,7 +21,7 @@ pub async fn run(
     llm_provider: Option<&str>,
     llm_model: Option<&str>,
 ) -> Result<()> {
-    println!("Indexing code at path: {}", path);
+    tracing::info!("Indexing code at path: {}", path);
     let start_time = Instant::now();
 
     // Set environment variables for the LLM provider and model if specified
@@ -42,7 +42,7 @@ pub async fn run(
     let mut indexed_files = HashSet::new();
 
     // First pass: Collect entities
-    println!("Pass 1: Collecting entities...");
+    tracing::info!("Pass 1: Collecting entities...");
     index_entities(
         path,
         &mut kg,
@@ -53,7 +53,7 @@ pub async fn run(
     )?;
 
     // Second pass: Build relationships
-    println!("Pass 2: Building relationships...");
+    tracing::info!("Pass 2: Building relationships...");
     index_relationships(
         path,
         &mut kg,
@@ -64,7 +64,7 @@ pub async fn run(
     )?;
 
     // Third pass: Infer domain concepts and their relationships
-    println!("Pass 3: Inferring domain model from all source files...");
+    tracing::info!("Pass 3: Inferring domain model from all source files...");
     infer_domain_model(
         &mut kg,
         &mut domain_concepts,
@@ -81,12 +81,12 @@ pub async fn run(
     let relationship_count = kg.get_relationship_count();
     let domain_concept_count = kg.get_domain_concepts().len();
 
-    println!("Indexing complete in {:.2?}.", duration);
-    println!("Knowledge Graph Statistics:");
-    println!("  - {} entities indexed", entity_count);
-    println!("  - {} relationships established", relationship_count);
-    println!("  - {} domain concepts inferred", domain_concept_count);
-    println!("Graph saved to knowledge_graph.json.");
+    tracing::info!("Indexing complete in {:.2?}.", duration);
+    tracing::info!("Knowledge Graph Statistics:");
+    tracing::info!("  - {} entities indexed", entity_count);
+    tracing::info!("  - {} relationships established", relationship_count);
+    tracing::info!("  - {} domain concepts inferred", domain_concept_count);
+    tracing::info!("Graph saved to knowledge_graph.json.");
 
     Ok(())
 }
@@ -326,7 +326,7 @@ fn index_relationships(
                     if let Err(e) =
                         kg.create_relationship(caller_id, callee_id, RelationshipType::Calls)
                     {
-                        println!("Failed to create call relationship: error: {}", e);
+                        tracing::warn!("Failed to create call relationship: error: {}", e);
                     }
                 }
             }
@@ -353,7 +353,10 @@ fn index_relationships(
 
                         if let Err(e) = kg.create_relationship(type_id.clone(), super_id, rel_type)
                         {
-                            println!("Failed to create inheritance relationship: error: {}", e);
+                            tracing::warn!(
+                                "Failed to create inheritance relationship: error: {}",
+                                e
+                            );
                         }
                     }
 
@@ -365,7 +368,7 @@ fn index_relationships(
                             method_id,
                             RelationshipType::Contains,
                         ) {
-                            println!(
+                            tracing::warn!(
                                 "Failed to create contains relationship (method): error: {}",
                                 e
                             );
@@ -380,7 +383,7 @@ fn index_relationships(
                             field_id,
                             RelationshipType::Contains,
                         ) {
-                            println!(
+                            tracing::warn!(
                                 "Failed to create contains relationship (field): error: {}",
                                 e
                             );
@@ -400,7 +403,7 @@ fn index_relationships(
                     imported_module_id,
                     RelationshipType::Imports,
                 ) {
-                    println!("Failed to create imports relationship: error: {}", e);
+                    tracing::warn!("Failed to create imports relationship: error: {}", e);
                 }
             }
         }
@@ -449,7 +452,7 @@ async fn infer_domain_model(
                 related_id,
                 RelationshipType::RepresentedBy,
             ) {
-                println!(
+                tracing::warn!(
                     "Failed to create domain representation relationship: error: {}",
                     e
                 );
@@ -458,7 +461,7 @@ async fn infer_domain_model(
     }
 
     // Use LLM to extract domain entities from important files
-    println!("Using LLM to extract domain models...");
+    tracing::info!("Using LLM to extract domain models...");
 
     if enable_domain_extraction {
         use std::collections::HashSet;
@@ -472,7 +475,7 @@ async fn infer_domain_model(
 
         // Process key model/entity files first - they likely contain domain entities
         // We'll look at the specified domain directory
-        println!("Analyzing directory for domain extraction: {}", domain_dir);
+        tracing::info!("Analyzing directory for domain extraction: {}", domain_dir);
 
         // Process code in the specified directory, respecting .gitignore
         let walker = WalkBuilder::new(&domain_dir)
@@ -527,13 +530,13 @@ async fn infer_domain_model(
                 continue;
             }
 
-            println!("Analyzing file for domain entities: {}", file_path);
+            tracing::info!("Analyzing file for domain entities: {}", file_path);
 
             // Extract insights from more files but limit LLM calls for large codebases
             // Skip very large files - they might exceed token limits even with truncation
             if content.len() > 100000 {
-                println!(
-                    "  Skipping very large file: {} ({} bytes)",
+                tracing::info!(
+                    "Skipping very large file: {} ({} bytes)",
                     file_path,
                     content.len()
                 );
@@ -544,15 +547,15 @@ async fn infer_domain_model(
             let domain_entities = match extractor.extract_domain_model(&content, &file_path).await {
                 Ok(entities) => entities,
                 Err(e) => {
-                    println!("  Error extracting domain entities: {}", e);
+                    tracing::error!("Error extracting domain entities: {}", e);
                     continue;
                 }
             };
 
             // Add each entity to the graph
             for entity in domain_entities {
-                println!(
-                    "  Found domain entity: {} ({})",
+                tracing::info!(
+                    "Found domain entity: {} ({})",
                     entity.name,
                     match entity.entity_type {
                         DomainEntityType::Class => "Class",
@@ -586,7 +589,7 @@ async fn infer_domain_model(
 
                 // Add to graph
                 if let Err(e) = kg.add_entity(domain_concept) {
-                    println!("  Error adding domain entity to graph: {}", e);
+                    tracing::error!("Error adding domain entity to graph: {}", e);
                     continue;
                 }
 
@@ -608,12 +611,12 @@ async fn infer_domain_model(
             }
         }
 
-        println!(
+        tracing::info!(
             "LLM domain extraction complete: {} entities found",
             domain_entity_count
         );
     } else {
-        println!(
+        tracing::info!(
             "Skipping LLM-based domain extraction (use --enable-domain-extraction flag to enable)"
         );
     }
@@ -674,7 +677,7 @@ async fn infer_domain_model(
             entity2_id.clone(),
             RelationshipType::RelatesTo,
         ) {
-            println!("Failed to create domain relationship: error: {}", e);
+            tracing::warn!("Failed to create domain relationship: error: {}", e);
         }
     }
 

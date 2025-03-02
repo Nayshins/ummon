@@ -549,10 +549,10 @@ impl KnowledgeGraph {
         // Create a serializable version of the graph
         // We derive relationship_data from relationship_store
         // This ensures consistency between the two data structures
-        
+
         // Get all relationships from the store for serialization
         let relationships = self.relationship_store.get_all_relationships();
-        
+
         let serialized = serde_json::json!({
             "entities": self.entities,
             "relationship_data": relationships,
@@ -1200,11 +1200,11 @@ mod tests {
 
         // Our implementation now creates placeholder entities, so this should succeed
         assert!(result.is_ok());
-        
+
         // Verify that a placeholder entity was created
         let nonexistent_entity = kg.get_entity(&id_nonexistent);
         assert!(nonexistent_entity.is_some());
-        
+
         // The relationship should exist
         let related = kg.get_related_entities(&id_a, Some(&RelationshipType::Calls));
         assert_eq!(related.len(), 1);
@@ -1714,7 +1714,7 @@ mod tests {
             RelationshipType::Calls,
         );
         assert!(result.is_ok());
-        
+
         // Verify the placeholder was created
         let nonexistent = kg.get_entity(&EntityId::new("nonexistent"));
         assert!(nonexistent.is_some());
