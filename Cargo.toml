@@ -3,6 +3,18 @@ name = "ummon"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "ummon"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ummon"
+path = "src/main.rs"
+
+[[bench]]
+name = "parsing_benchmarks"
+harness = false
+
 [dependencies]
 anyhow = "1.0"
 clap = { version = "4.2", features = ["derive"] }
@@ -30,6 +42,10 @@ regex = "1.8"
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1.0"
 futures = "0.3"
+
+[dev-dependencies]
+criterion = "0.5"
+tempfile = "3.8"
 
 [features]
 default = []
