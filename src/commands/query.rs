@@ -3,83 +3,12 @@ use crate::graph::{
     KnowledgeGraph,
 };
 use crate::prompt::context_builder::build_context;
-use crate::prompt::llm_integration::{query_llm, LlmConfig, LlmProvider};
+use crate::prompt::llm_integration::{query_llm, LlmConfig};
 use anyhow::Result;
 use regex::Regex;
 use serde_json::{json, Map, Value};
-use std::str::FromStr;
-use std::sync::OnceLock;
 
-// Global LLM configuration for this command
-static LLM_CONFIG: OnceLock<LlmConfig> = OnceLock::new();
-
-// Set up the LLM configuration based on command-line args and environment variables
-fn set_llm_config(llm_provider: Option<&str>, llm_model: Option<&str>) {
-    let provider_str = llm_provider
-        .map(|s| s.to_string())
-        .or_else(|| std::env::var("LLM_PROVIDER").ok())
-        .unwrap_or_else(|| "openrouter".to_string());
-
-    let provider = LlmProvider::from_str(&provider_str).unwrap_or(LlmProvider::OpenRouter);
-
-    // Get the appropriate API key based on the provider
-    let api_key = match provider {
-        LlmProvider::OpenRouter => std::env::var("OPENROUTER_API_KEY").unwrap_or_default(),
-        LlmProvider::OpenAI => std::env::var("OPENAI_API_KEY").unwrap_or_default(),
-        LlmProvider::Anthropic => std::env::var("ANTHROPIC_API_KEY").unwrap_or_default(),
-        LlmProvider::GoogleVertexAI => std::env::var("GOOGLE_API_KEY").unwrap_or_default(),
-        LlmProvider::Ollama => String::new(),
-        LlmProvider::Mock => String::new(),
-    };
-
-    // Determine the model to use (CLI option, then env var, then default)
-    let model = llm_model
-        .map(|s| s.to_string())
-        .or_else(|| std::env::var("LLM_MODEL").ok())
-        .unwrap_or_else(|| {
-            // Default models based on provider
-            match provider {
-                LlmProvider::OpenRouter => "anthropic/claude-3-5-haiku-20241022".to_string(),
-                LlmProvider::OpenAI => "gpt-4-turbo".to_string(),
-                LlmProvider::Anthropic => "claude-3-5-haiku-20241022".to_string(),
-                LlmProvider::GoogleVertexAI => "gemini-1.5-pro".to_string(),
-                LlmProvider::Ollama => "llama3".to_string(),
-                LlmProvider::Mock => "mock".to_string(),
-            }
-        });
-
-    // Create and store the configuration
-    let config = LlmConfig {
-        provider,
-        api_key,
-        model,
-        temperature: 0.2,
-        max_tokens: 1500,
-        endpoint_url: std::env::var("LLM_ENDPOINT").ok(),
-    };
-
-    LLM_CONFIG.get_or_init(|| config);
-}
-
-// Get the LLM configuration, creating a default one if not already set
-fn get_llm_config() -> LlmConfig {
-    LLM_CONFIG
-        .get_or_init(|| {
-            // Create a default configuration
-            let provider = LlmProvider::OpenRouter;
-            let api_key = std::env::var("OPENROUTER_API_KEY").unwrap_or_default();
-
-            LlmConfig {
-                provider,
-                api_key,
-                model: "anthropic/claude-3-5-haiku-20241022".to_string(), // Updated default model
-                temperature: 0.2,
-                max_tokens: 1500,
-                endpoint_url: None,
-            }
-        })
-        .clone()
-}
+// No global configuration needed - using shared function from llm_integration.rs
 
 /// Tiered query processor that uses different strategies based on query complexity
 /// Query options for refining search results
@@ -124,11 +53,11 @@ pub async fn run(
         no_llm,
     };
 
-    // Store LLM configuration for the process_query function
-    set_llm_config(llm_provider, llm_model);
+    // Get LLM configuration using the shared function
+    let config = crate::prompt::llm_integration::get_llm_config(llm_provider, llm_model);
 
     // Try to process the query using the most efficient method
-    let response = match process_query(&kg, instruction, &options).await? {
+    let response = match process_query(&kg, instruction, &options, &config).await? {
         QueryResult::Direct(value) => {
             // Direct result from KG queries
             serde_json::to_string_pretty(&value)?
@@ -170,6 +99,7 @@ async fn process_query(
     kg: &KnowledgeGraph,
     instruction: &str,
     options: &QueryOptions,
+    config: &LlmConfig,
 ) -> Result<QueryResult> {
     // 1. Try to match known direct query patterns first
     if let Some(result) = try_direct_query(kg, instruction, options)? {
@@ -184,8 +114,7 @@ async fn process_query(
     // 3. Fall back to LLM for complex semantic queries (unless disabled)
     if !options.no_llm {
         let context = build_context(kg, instruction);
-        let config = get_llm_config();
-        let response = query_llm(&context, &config).await?;
+        let response = query_llm(&context, config).await?;
         return Ok(QueryResult::LLM(response));
     }
 
