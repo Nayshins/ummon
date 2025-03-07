@@ -43,15 +43,28 @@ where
 {
     async fn read_request(&mut self) -> Result<JsonRpcRequest, TransportError> {
         let mut line = String::new();
-        self.reader
+        let bytes_read = self
+            .reader
             .read_line(&mut line)
             .await
             .map_err(|e| TransportError::IoError(e))?;
 
-        if line.is_empty() {
+        // Check if we actually read any bytes (0 means EOF)
+        if bytes_read == 0 {
+            // For stdin, we should wait for more input rather than error
+            // Sleep a little to avoid busy-waiting
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
             return Err(TransportError::IoError(std::io::Error::new(
-                std::io::ErrorKind::UnexpectedEof,
-                "Reached end of input",
+                std::io::ErrorKind::WouldBlock,
+                "No input available, waiting for more",
+            )));
+        }
+
+        // Empty line (just newline) should be skipped
+        if line.trim().is_empty() {
+            return Err(TransportError::IoError(std::io::Error::new(
+                std::io::ErrorKind::WouldBlock,
+                "Empty line received, waiting for JSON-RPC",
             )));
         }
 

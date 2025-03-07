@@ -27,21 +27,44 @@ impl<R: Router> Server<R> {
         info!("Starting MCP server");
 
         loop {
-            let request = match transport.read_request().await {
-                Ok(req) => req,
-                Err(e) => {
-                    error!("Error reading request: {:?}", e);
-                    break;
+            match transport.read_request().await {
+                Ok(request) => {
+                    debug!("Received request: {:?}", request.method);
+
+                    let response = self.handle_request(request).await;
+
+                    if let Err(e) = transport.send_response(response).await {
+                        error!("Error sending response: {:?}", e);
+                        // Only break on send errors if they're fatal
+                        if !matches!(e, crate::mcp_core::TransportError::IoError(ref io_err) if io_err.kind() == std::io::ErrorKind::WouldBlock)
+                        {
+                            break;
+                        }
+                    }
                 }
-            };
-
-            debug!("Received request: {:?}", request.method);
-
-            let response = self.handle_request(request).await;
-
-            if let Err(e) = transport.send_response(response).await {
-                error!("Error sending response: {:?}", e);
-                break;
+                Err(e) => {
+                    // Handle different error types appropriately
+                    match &e {
+                        // For WouldBlock errors, just continue the loop - these are non-fatal and expected
+                        crate::mcp_core::TransportError::IoError(io_err)
+                            if io_err.kind() == std::io::ErrorKind::WouldBlock =>
+                        {
+                            // Don't log these - they're just indicating we're waiting for input
+                            continue;
+                        }
+                        // Fatal errors that should cause the server to exit
+                        crate::mcp_core::TransportError::IoError(io_err)
+                            if io_err.kind() == std::io::ErrorKind::BrokenPipe =>
+                        {
+                            error!("Connection broken: {:?}", e);
+                            break;
+                        }
+                        // Other errors - log them but keep running unless they're related to connection issues
+                        _ => {
+                            error!("Error reading request: {:?}", e);
+                        }
+                    }
+                }
             }
         }
 
