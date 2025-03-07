@@ -172,6 +172,34 @@ cargo test <test_name>     # Run specific test
 cargo fmt
 ```
 
+### Testing the MCP Server
+
+We provide multiple test clients for the MCP server:
+
+```bash
+# Using the full test client (spawns its own server)
+node test/javascript/mcp_client.js
+
+# Using the stdin client with an existing server
+cargo run -- serve | node test/javascript/stdin_client.js
+```
+
+The test clients verify:
+- Server initialization and capabilities detection
+- Tool listing and execution
+- Error handling with invalid methods and parameters
+- Entity search and relationship exploration
+- Resource management
+
+### Test Resources
+
+- `test/java/`: Java test files for parser testing
+  - `Test.java`: Simple Java class for basic parsing
+  - `ComplexExample.java`: Advanced Java features (generics, annotations, etc.)
+- `test/javascript/`: JavaScript test clients
+  - `mcp_client.js`: Full-featured test client that spawns a server
+  - `stdin_client.js`: Simple client for piped testing
+
 ## License
 
 [APACHE License](LICENSE)
