@@ -5,6 +5,7 @@ mod mcp_core;
 mod mcp_server;
 mod parser;
 mod prompt;
+mod query;
 
 use anyhow::Result;
 use clap::Parser;
@@ -43,22 +44,20 @@ async fn main() -> Result<()> {
         cli::Commands::Query {
             query,
             format,
-            type_filter,
-            path,
-            exact,
-            limit,
             no_llm,
+            limit,
             llm_provider,
             llm_model,
+            ..
         } => {
+            // Use the natural flag as the opposite of no_llm
+            let natural = !no_llm;
+
             commands::query::run(
                 &query,
                 &format,
-                type_filter.as_deref(),
-                path.as_deref(),
-                exact,
+                natural,
                 limit,
-                no_llm,
                 llm_provider.as_deref(),
                 llm_model.as_deref(),
             )

@@ -25,13 +25,15 @@ Named after the AI Ummon from Dan Simmons' Hyperion Cantos, this project provide
    - Works with multiple languages (Rust, Python, JavaScript, Java)
 
 2. **Advanced Querying System**
-   - Query your codebase using natural language or precise grep-like flags
-   - Find entities, relationships, and domain concepts with tiered processing:
-     - Direct knowledge graph queries for common patterns
-     - Pattern-based queries for structured requests
-     - LLM-powered analysis for complex semantic questions
-   - Efficient filtering with type, path, and exact matching options
-   - Examples: "Show functions that use the database", "find api --type-filter function --path src/auth"
+   - Query your codebase using a powerful structured query language or natural language
+   - Two main query types:
+     - Select queries: `select [entity_type] where [conditions]`
+     - Traversal queries: `[source_type] [relationship] [target_type] where [conditions]`
+   - Natural language translation for user-friendly interaction
+   - Rich filtering capabilities with attribute conditions and logical operators
+   - Multiple output formats (text, JSON, CSV, tree)
+   - Examples: "select functions where name like 'auth%'", "show me all authentication functions"
+   - See [Query System Documentation](docs/query_system.md) for more details
 
 3. **Domain Model Extraction**
    - Uses LLMs to identify business entities and concepts
@@ -62,26 +64,31 @@ ummon index /path/to/codebase --enable-domain-extraction
 # Specify a custom domain directory for extraction
 ummon index /path/to/codebase --enable-domain-extraction --domain-dir models/
 
-# Query the knowledge graph
+# Query using natural language
 ummon query "show all authentication functions"
 
-# Query with JSON output
-ummon query "show all authentication functions" --format json
+# Query using structured query language
+ummon query "select functions where name like 'auth%'" --no-llm
 
-# Filter query results by entity type
+# Find relationships between entities (traversal query)
+ummon query "functions calling functions where name like 'validate%'" --no-llm
+
+# Query with different output formats
+ummon query "select functions" --format json
+ummon query "select functions" --format csv
+ummon query "select functions" --format tree
+
+# Filter query results by type
 ummon query "find api" --type-filter function
 
 # Filter by file path pattern
 ummon query "show all entities" --path src/auth
 
 # Limit the number of results
-ummon query "list functions" --limit 10
+ummon query "select functions" --limit 10
 
-# Use exact matching only (no partial matches)
-ummon query "find user" --exact
-
-# Skip LLM processing for faster results
-ummon query "show authentication logic" --no-llm
+# Skip LLM processing for structured queries
+ummon query "select functions where file_path like 'src/auth/%'" --no-llm
 
 # Generate AI-assisted recommendations
 ummon assist "implement a user registration function"

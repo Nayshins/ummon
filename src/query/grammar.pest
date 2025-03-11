@@ -1,0 +1,61 @@
+// Ummon Query Language grammar definition
+
+// Main rules
+query = { SOI ~ (select_query | traversal_query) ~ EOI }
+
+// Select query: select entities with optional conditions
+select_query = { "select" ~ entity_type ~ ("where" ~ condition)? }
+
+// Traversal query: find relationships between entities
+traversal_query = { entity_type ~ relationship ~ entity_type ~ ("where" ~ condition)? }
+
+// Entity types
+entity_type = { 
+    "functions" | "methods" | "classes" | "interfaces" | "traits" | 
+    "structs" | "enums" | "modules" | "files" | "variables" | 
+    "fields" | "constants" | "domain_concepts" | "types"
+}
+
+// Relationship types
+relationship = { 
+    "calling" | "calls" | "containing" | "contains" | 
+    "importing" | "imports" | "inheriting" | "inherits" | 
+    "implementing" | "implements" | "referencing" | "references" | 
+    "using" | "uses" | "depending" | "depends_on" | 
+    "represented_by" | "relates_to"
+}
+
+// Conditions for filtering
+condition = { 
+    "(" ~ condition ~ ")" | 
+    condition ~ logical_op ~ condition |
+    attribute ~ operator ~ value |
+    "has" ~ attribute
+}
+
+// Entity attributes
+attribute = { "name" | "file_path" | "path" | "confidence" | "documentation" | IDENTIFIER }
+
+// Comparison and string matching operators
+operator = { "=" | "!=" | ">" | "<" | ">=" | "<=" | "like" }
+
+// Logical operators for combining conditions
+logical_op = { "and" | "or" | "not" }
+
+// Values for comparisons
+value = { quoted_string | number }
+
+// String literal with single quotes
+quoted_string = { "'" ~ (!"'" ~ ANY)* ~ "'" }
+
+// Number literal (integer or decimal)
+number = { ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
+
+// Generic identifier
+IDENTIFIER = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+
+// Whitespace handling
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+
+// Comments
+COMMENT = _{ "//" ~ (!"\n" ~ ANY)* }
