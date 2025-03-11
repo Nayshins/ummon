@@ -115,6 +115,12 @@ pub trait Entity {
     }
     #[allow(dead_code)]
     fn metadata_mut(&mut self) -> &mut HashMap<String, String>;
+    
+    /// Serialize the entity data to a string for database storage
+    /// Default implementation provides empty JSON object
+    fn serialize_data(&self) -> anyhow::Result<String> {
+        Ok("{}".to_string())
+    }
 }
 
 /// Common properties for all entity implementations
@@ -193,6 +199,18 @@ pub struct FunctionEntity {
     pub is_abstract: bool,
 }
 
+/// Serializable data for function entities
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct FunctionEntityData {
+    pub parameters: Vec<Parameter>,
+    pub return_type: Option<String>,
+    pub visibility: Visibility,
+    pub is_async: bool,
+    pub is_static: bool,
+    pub is_constructor: bool,
+    pub is_abstract: bool,
+}
+
 impl Entity for FunctionEntity {
     fn id(&self) -> &EntityId {
         &self.base.id
@@ -221,12 +239,35 @@ impl Entity for FunctionEntity {
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.base.metadata
     }
+    
+    fn serialize_data(&self) -> anyhow::Result<String> {
+        let data = FunctionEntityData {
+            parameters: self.parameters.clone(),
+            return_type: self.return_type.clone(),
+            visibility: self.visibility.clone(),
+            is_async: self.is_async,
+            is_static: self.is_static,
+            is_constructor: self.is_constructor,
+            is_abstract: self.is_abstract,
+        };
+        serde_json::to_string(&data).map_err(Into::into)
+    }
 }
 
 /// Class, struct, or interface definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TypeEntity {
     pub base: BaseEntity,
+    pub fields: Vec<EntityId>,
+    pub methods: Vec<EntityId>,
+    pub supertypes: Vec<EntityId>,
+    pub visibility: Visibility,
+    pub is_abstract: bool,
+}
+
+/// Serializable data for type entities
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct TypeEntityData {
     pub fields: Vec<EntityId>,
     pub methods: Vec<EntityId>,
     pub supertypes: Vec<EntityId>,
@@ -262,12 +303,31 @@ impl Entity for TypeEntity {
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.base.metadata
     }
+    
+    fn serialize_data(&self) -> anyhow::Result<String> {
+        let data = TypeEntityData {
+            fields: self.fields.clone(),
+            methods: self.methods.clone(),
+            supertypes: self.supertypes.clone(),
+            visibility: self.visibility.clone(),
+            is_abstract: self.is_abstract,
+        };
+        serde_json::to_string(&data).map_err(Into::into)
+    }
 }
 
 /// Module or file representation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModuleEntity {
     pub base: BaseEntity,
+    pub path: String,
+    pub children: Vec<EntityId>,
+    pub imports: Vec<String>,
+}
+
+/// Serializable data for module entities
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct ModuleEntityData {
     pub path: String,
     pub children: Vec<EntityId>,
     pub imports: Vec<String>,
@@ -301,12 +361,30 @@ impl Entity for ModuleEntity {
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.base.metadata
     }
+    
+    fn serialize_data(&self) -> anyhow::Result<String> {
+        let data = ModuleEntityData {
+            path: self.path.clone(),
+            children: self.children.clone(),
+            imports: self.imports.clone(),
+        };
+        serde_json::to_string(&data).map_err(Into::into)
+    }
 }
 
 /// Variable, field, or constant definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VariableEntity {
     pub base: BaseEntity,
+    pub type_annotation: Option<String>,
+    pub visibility: Visibility,
+    pub is_const: bool,
+    pub is_static: bool,
+}
+
+/// Serializable data for variable entities
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct VariableEntityData {
     pub type_annotation: Option<String>,
     pub visibility: Visibility,
     pub is_const: bool,
@@ -341,12 +419,30 @@ impl Entity for VariableEntity {
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.base.metadata
     }
+    
+    fn serialize_data(&self) -> anyhow::Result<String> {
+        let data = VariableEntityData {
+            type_annotation: self.type_annotation.clone(),
+            visibility: self.visibility.clone(),
+            is_const: self.is_const,
+            is_static: self.is_static,
+        };
+        serde_json::to_string(&data).map_err(Into::into)
+    }
 }
 
 /// Business domain concept
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DomainConceptEntity {
     pub base: BaseEntity,
+    pub attributes: Vec<String>,
+    pub description: Option<String>,
+    pub confidence: f32,
+}
+
+/// Serializable data for domain concept entities
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct DomainConceptEntityData {
     pub attributes: Vec<String>,
     pub description: Option<String>,
     pub confidence: f32,
@@ -379,6 +475,15 @@ impl Entity for DomainConceptEntity {
 
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.base.metadata
+    }
+    
+    fn serialize_data(&self) -> anyhow::Result<String> {
+        let data = DomainConceptEntityData {
+            attributes: self.attributes.clone(),
+            description: self.description.clone(),
+            confidence: self.confidence,
+        };
+        serde_json::to_string(&data).map_err(Into::into)
     }
 }
 

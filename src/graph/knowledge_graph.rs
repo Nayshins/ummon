@@ -8,6 +8,29 @@ use super::entity::{
 };
 use super::relationship::{Relationship, RelationshipStore, RelationshipType};
 
+/// A trait for database connection implementations.
+/// Provides methods for saving and loading entities and relationships.
+pub trait DatabaseConnection {
+    /// Save a single entity to the database
+    fn save_entity(&self, entity: &dyn Entity) -> Result<()>;
+    
+    /// Save a single relationship to the database
+    fn save_relationship(&self, relationship: &Relationship) -> Result<()>;
+    
+    /// Load all entities from the database
+    fn load_entities(&self) -> Result<Vec<Box<dyn Entity>>>;
+    
+    /// Load all relationships from the database
+    fn load_relationships(&self) -> Result<Vec<Relationship>>;
+    
+    /// Save multiple entities and relationships in a single transaction
+    fn save_all_in_transaction(
+        &self,
+        entities: &[&dyn Entity],
+        relationships: &[&Relationship],
+    ) -> Result<()>;
+}
+
 /// Enhanced knowledge graph that stores entities and relationships
 #[derive(Debug, Serialize, Deserialize)]
 pub struct KnowledgeGraph {
