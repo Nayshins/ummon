@@ -1,11 +1,14 @@
 use anyhow::Result;
-use rusqlite::{params, Connection};
+use log::{debug, error, info};
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
+use rusqlite::params;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
 
 use crate::graph::entity::{
-    BaseEntity, DomainConceptEntity, Entity, EntityId, EntityType, FunctionEntity, ModuleEntity,
-    TypeEntity, VariableEntity,
+    BaseEntity, DomainConceptEntity, DomainConceptEntityData, Entity, EntityId, EntityType, 
+    FunctionEntity, FunctionEntityData, ModuleEntity, ModuleEntityData, TypeEntity, 
+    TypeEntityData, VariableEntity, VariableEntityData,
 };
 use crate::graph::knowledge_graph::DatabaseConnection;
 use crate::graph::relationship::{Relationship, RelationshipType};
@@ -14,16 +17,21 @@ use crate::graph::relationship::{Relationship, RelationshipType};
 #[allow(dead_code)]
 const CURRENT_SCHEMA_VERSION: i32 = 1;
 
-/// Database wrapper for managing the SQLite knowledge graph storage
+/// For testing - ensures the module is included
+pub fn for_test() -> bool {
+    true
+}
+
+/// Database wrapper for managing the SQLite knowledge graph storage with connection pooling
 pub struct Database {
-    conn: Arc<Mutex<Connection>>,
+    pool: Pool<SqliteConnectionManager>,
     db_path: String,
 }
 
 impl std::fmt::Debug for Database {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Database")
-            .field("conn", &"SQLite Connection")
+            .field("pool", &"SQLite Connection Pool")
             .field("db_path", &self.db_path)
             .finish()
     }
@@ -58,7 +66,7 @@ impl DatabaseConnection for Database {
 impl Clone for Database {
     fn clone(&self) -> Self {
         Self {
-            conn: self.conn.clone(),
+            pool: self.pool.clone(),
             db_path: self.db_path.clone(),
         }
     }
@@ -67,13 +75,27 @@ impl Clone for Database {
 impl Database {
     /// Create a new database connection, initializing the schema if needed
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let conn = Connection::open(&path)?;
         let db_path = path.as_ref().to_string_lossy().to_string();
+        info!("Initializing database connection pool at {}", db_path);
+        
+        // Configure SQLite connection
+        let manager = SqliteConnectionManager::file(&path);
+        
+        // Build a connection pool with a max size of 10 connections
+        let pool = Pool::builder()
+            .max_size(10)
+            .build(manager)
+            .map_err(|e| anyhow::anyhow!("Failed to create connection pool for {}: {}", db_path, e))?;
+            
         let db = Self {
-            conn: Arc::new(Mutex::new(conn)),
+            pool,
             db_path,
         };
+        
+        // Initialize the schema
         db.initialize_schema()?;
+        debug!("Database schema initialized successfully");
+        
         Ok(db)
     }
 
@@ -82,19 +104,21 @@ impl Database {
         Self::new(path)
     }
 
-    /// Creates a new connection to the same database
-    /// This is used to get a fresh connection per thread
-    pub fn new_connection(&self) -> Result<Connection> {
-        Connection::open(&self.db_path)
-            .map_err(|e| anyhow::anyhow!("Failed to open database: {}", e))
+    /// Get a connection from the pool
+    pub fn get_connection(&self) -> Result<r2d2::PooledConnection<SqliteConnectionManager>> {
+        self.pool
+            .get()
+            .map_err(|e| anyhow::anyhow!("Failed to get connection from pool for {}: {}", self.db_path, e))
     }
 
-    /// Initialize the database schema if needed
+    /// Initialize the database schema if needed, using a single transaction
     fn initialize_schema(&self) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
-
+        debug!("Initializing database schema for {}", self.db_path);
+        let mut conn = self.get_connection()?;
+        let tx = conn.transaction()?;
+        
         // Create schema_version table if it doesn't exist
-        conn.execute(
+        tx.execute(
             "CREATE TABLE IF NOT EXISTS schema_version (
                 version INTEGER PRIMARY KEY
             )",
@@ -102,30 +126,19 @@ impl Database {
         )?;
 
         // Initialize version if needed
-        conn.execute(
+        tx.execute(
             "INSERT OR IGNORE INTO schema_version (version) VALUES (0)",
             [],
         )?;
-
-        // Apply migrations by dropping the lock and calling apply_migrations
-        drop(conn);
-        self.apply_migrations()?;
-
-        Ok(())
-    }
-
-    /// Apply schema migrations as needed
-    fn apply_migrations(&self) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
-
+        
         // Check current schema version
-        let version: i32 =
-            conn.query_row("SELECT version FROM schema_version", [], |row| row.get(0))?;
+        let version: i32 = tx.query_row("SELECT version FROM schema_version", [], |row| row.get(0))?;
 
         // Apply migrations if needed
         if version < 1 {
+            debug!("Applying schema migration to version 1");
             // Initial schema creation
-            conn.execute_batch(
+            tx.execute_batch(
                 "CREATE TABLE entities (
                     id TEXT PRIMARY KEY,
                     name TEXT NOT NULL,
@@ -158,30 +171,39 @@ impl Database {
             )?;
 
             // Update schema version
-            conn.execute("UPDATE schema_version SET version = 1", [])?;
+            tx.execute("UPDATE schema_version SET version = 1", [])?;
+            info!("Database schema updated to version 1");
         }
 
         // Add more version checks and migrations here for future schema changes
         // if version < 2 { ... }
 
+        // Commit the transaction
+        tx.commit()?;
         Ok(())
     }
 
     /// Save an entity to the database
     pub fn save_entity(&self, entity: &dyn Entity) -> Result<()> {
-        // Get entity data using our helper function
-        let entity_data = get_entity_data(entity)?;
+        info!("Saving entity {} to {}", entity.id().as_str(), self.db_path);
+        
+        // Get entity data using the entity's serialize_data method
+        let entity_data = entity.serialize_data()
+            .map_err(|e| anyhow::anyhow!("Failed to serialize entity data for {}: {}", entity.id().as_str(), e))?;
 
         // Serialize location data
         let location_json = if let Some(loc) = entity.location() {
-            serde_json::to_string(loc)?
+            serde_json::to_string(loc)
+                .map_err(|e| anyhow::anyhow!("Failed to serialize location for {}: {}", entity.id().as_str(), e))?
         } else {
             "null".to_string()
         };
 
-        // Get a fresh connection for this operation
-        let conn = self.new_connection()?;
-        conn.execute(
+        // Get a connection from the pool
+        let conn = self.get_connection()?;
+        
+        // Execute the insert/update
+        match conn.execute(
             "INSERT OR REPLACE INTO entities 
             (id, name, entity_type, file_path, location, documentation, containing_entity, data)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -202,23 +224,38 @@ impl Database {
                     .map(|s| s.as_str()),
                 entity_data,
             ],
-        )?;
-
-        Ok(())
+        ) {
+            Ok(_) => {
+                debug!("Successfully saved entity {}", entity.id().as_str());
+                Ok(())
+            },
+            Err(e) => {
+                error!("Failed to save entity {}: {}", entity.id().as_str(), e);
+                Err(anyhow::anyhow!("Failed to save entity {}: {}", entity.id().as_str(), e))
+            }
+        }
     }
 
     /// Save a relationship to the database
     pub fn save_relationship(&self, relationship: &Relationship) -> Result<()> {
+        info!("Saving relationship {} from {} to {}", 
+              relationship.id.0, 
+              relationship.source_id.as_str(), 
+              relationship.target_id.as_str());
+        
         // Serialize metadata
         let metadata_json = if !relationship.metadata.is_empty() {
-            Some(serde_json::to_string(&relationship.metadata)?)
+            Some(serde_json::to_string(&relationship.metadata)
+                .map_err(|e| anyhow::anyhow!("Failed to serialize relationship metadata for {}: {}", relationship.id.0, e))?)
         } else {
             None
         };
 
-        // Get a fresh connection for this operation
-        let conn = self.new_connection()?;
-        conn.execute(
+        // Get a connection from the pool
+        let conn = self.get_connection()?;
+        
+        // Execute the insert/update
+        match conn.execute(
             "INSERT OR REPLACE INTO relationships 
             (id, source_id, target_id, relationship_type, weight, metadata)
             VALUES (?, ?, ?, ?, ?, ?)",
@@ -230,15 +267,24 @@ impl Database {
                 relationship.weight,
                 metadata_json,
             ],
-        )?;
-
-        Ok(())
+        ) {
+            Ok(_) => {
+                debug!("Successfully saved relationship {}", relationship.id.0);
+                Ok(())
+            },
+            Err(e) => {
+                error!("Failed to save relationship {}: {}", relationship.id.0, e);
+                Err(anyhow::anyhow!("Failed to save relationship {}: {}", relationship.id.0, e))
+            }
+        }
     }
 
     /// Load all entities from the database
     pub fn load_entities(&self) -> Result<Vec<Box<dyn Entity>>> {
-        // Get a fresh connection for this operation
-        let conn = self.new_connection()?;
+        info!("Loading all entities from {}", self.db_path);
+        
+        // Get a connection from the pool
+        let conn = self.get_connection()?;
         let mut stmt = conn.prepare(
             "SELECT id, name, entity_type, file_path, location, documentation, containing_entity, data 
              FROM entities"
@@ -269,6 +315,8 @@ impl Database {
         let mut entities = Vec::new();
 
         for row_result in rows {
+            let result = row_result.map_err(|e| anyhow::anyhow!("Error reading entity row: {}", e));
+            
             let (
                 id,
                 name,
@@ -278,14 +326,26 @@ impl Database {
                 documentation,
                 containing_entity,
                 data_json,
-            ) = row_result?;
+            ) = match result {
+                Ok(data) => data,
+                Err(e) => {
+                    error!("Failed to read entity row: {}", e);
+                    continue;  // Skip this row and continue with the next one
+                }
+            };
 
             // Parse entity type
             let entity_type = parse_entity_type(&entity_type_str);
 
             // Parse location if present
             let location = if let Some(loc_str) = location_json {
-                serde_json::from_str(&loc_str).ok()
+                match serde_json::from_str(&loc_str) {
+                    Ok(loc) => Some(loc),
+                    Err(e) => {
+                        error!("Failed to parse location for entity {}: {}", id, e);
+                        None
+                    }
+                }
             } else {
                 None
             };
@@ -298,20 +358,25 @@ impl Database {
             base.documentation = documentation;
             base.containing_entity = containing_entity.map(|id| EntityId::new(&id));
 
-            // Create specific entity based on type
+            // Create specific entity based on type, with improved error handling
             let entity: Box<dyn Entity> = match entity_type {
                 EntityType::Function | EntityType::Method => {
-                    let data: FunctionEntityData = serde_json::from_str(&data_json)?;
-                    Box::new(FunctionEntity {
-                        base,
-                        parameters: data.parameters,
-                        return_type: data.return_type,
-                        visibility: data.visibility,
-                        is_async: data.is_async,
-                        is_static: data.is_static,
-                        is_constructor: data.is_constructor,
-                        is_abstract: data.is_abstract,
-                    })
+                    match serde_json::from_str::<FunctionEntityData>(&data_json) {
+                        Ok(data) => Box::new(FunctionEntity {
+                            base,
+                            parameters: data.parameters,
+                            return_type: data.return_type,
+                            visibility: data.visibility,
+                            is_async: data.is_async,
+                            is_static: data.is_static,
+                            is_constructor: data.is_constructor,
+                            is_abstract: data.is_abstract,
+                        }),
+                        Err(e) => {
+                            error!("Failed to parse FunctionEntityData for entity {}: {}", id, e);
+                            Box::new(base)
+                        }
+                    }
                 }
                 EntityType::Class
                 | EntityType::Interface
@@ -319,43 +384,63 @@ impl Database {
                 | EntityType::Struct
                 | EntityType::Enum
                 | EntityType::Type => {
-                    let data: TypeEntityData = serde_json::from_str(&data_json)?;
-                    Box::new(TypeEntity {
-                        base,
-                        fields: data.fields,
-                        methods: data.methods,
-                        supertypes: data.supertypes,
-                        visibility: data.visibility,
-                        is_abstract: data.is_abstract,
-                    })
+                    match serde_json::from_str::<TypeEntityData>(&data_json) {
+                        Ok(data) => Box::new(TypeEntity {
+                            base,
+                            fields: data.fields,
+                            methods: data.methods,
+                            supertypes: data.supertypes,
+                            visibility: data.visibility,
+                            is_abstract: data.is_abstract,
+                        }),
+                        Err(e) => {
+                            error!("Failed to parse TypeEntityData for entity {}: {}", id, e);
+                            Box::new(base)
+                        }
+                    }
                 }
                 EntityType::Module | EntityType::File => {
-                    let data: ModuleEntityData = serde_json::from_str(&data_json)?;
-                    Box::new(ModuleEntity {
-                        base,
-                        path: data.path,
-                        children: data.children,
-                        imports: data.imports,
-                    })
+                    match serde_json::from_str::<ModuleEntityData>(&data_json) {
+                        Ok(data) => Box::new(ModuleEntity {
+                            base,
+                            path: data.path,
+                            children: data.children,
+                            imports: data.imports,
+                        }),
+                        Err(e) => {
+                            error!("Failed to parse ModuleEntityData for entity {}: {}", id, e);
+                            Box::new(base)
+                        }
+                    }
                 }
                 EntityType::Variable | EntityType::Field | EntityType::Constant => {
-                    let data: VariableEntityData = serde_json::from_str(&data_json)?;
-                    Box::new(VariableEntity {
-                        base,
-                        type_annotation: data.type_annotation,
-                        visibility: data.visibility,
-                        is_const: data.is_const,
-                        is_static: data.is_static,
-                    })
+                    match serde_json::from_str::<VariableEntityData>(&data_json) {
+                        Ok(data) => Box::new(VariableEntity {
+                            base,
+                            type_annotation: data.type_annotation,
+                            visibility: data.visibility,
+                            is_const: data.is_const,
+                            is_static: data.is_static,
+                        }),
+                        Err(e) => {
+                            error!("Failed to parse VariableEntityData for entity {}: {}", id, e);
+                            Box::new(base)
+                        }
+                    }
                 }
                 EntityType::DomainConcept => {
-                    let data: DomainConceptEntityData = serde_json::from_str(&data_json)?;
-                    Box::new(DomainConceptEntity {
-                        base,
-                        attributes: data.attributes,
-                        description: data.description,
-                        confidence: data.confidence,
-                    })
+                    match serde_json::from_str::<DomainConceptEntityData>(&data_json) {
+                        Ok(data) => Box::new(DomainConceptEntity {
+                            base,
+                            attributes: data.attributes,
+                            description: data.description,
+                            confidence: data.confidence,
+                        }),
+                        Err(e) => {
+                            error!("Failed to parse DomainConceptEntityData for entity {}: {}", id, e);
+                            Box::new(base)
+                        }
+                    }
                 }
                 _ => Box::new(base),
             };
@@ -363,13 +448,16 @@ impl Database {
             entities.push(entity);
         }
 
+        debug!("Loaded {} entities from database", entities.len());
         Ok(entities)
     }
 
     /// Load all relationships from the database
     pub fn load_relationships(&self) -> Result<Vec<Relationship>> {
-        // Get a fresh connection for this operation
-        let conn = self.new_connection()?;
+        info!("Loading all relationships from {}", self.db_path);
+        
+        // Get a connection from the pool
+        let conn = self.get_connection()?;
         let mut stmt = conn.prepare(
             "SELECT id, source_id, target_id, relationship_type, weight, metadata 
              FROM relationships",
@@ -396,15 +484,28 @@ impl Database {
         let mut relationships = Vec::new();
 
         for row_result in rows {
-            let (id, source_id, target_id, relationship_type_str, weight, metadata_json) =
-                row_result?;
+            let result = row_result.map_err(|e| anyhow::anyhow!("Error reading relationship row: {}", e));
+            
+            let (id, source_id, target_id, relationship_type_str, weight, metadata_json) = match result {
+                Ok(data) => data,
+                Err(e) => {
+                    error!("Failed to read relationship row: {}", e);
+                    continue;  // Skip this row and continue with the next one
+                }
+            };
 
             // Parse relationship type
             let rel_type = parse_relationship_type(&relationship_type_str);
 
-            // Parse metadata if present
+            // Parse metadata if present with improved error handling
             let metadata = if let Some(meta_str) = metadata_json {
-                serde_json::from_str(&meta_str)?
+                match serde_json::from_str(&meta_str) {
+                    Ok(meta) => meta,
+                    Err(e) => {
+                        error!("Failed to parse metadata for relationship {}: {}", id, e);
+                        std::collections::HashMap::new()
+                    }
+                }
             } else {
                 std::collections::HashMap::new()
             };
@@ -421,33 +522,39 @@ impl Database {
             relationships.push(relationship);
         }
 
+        debug!("Loaded {} relationships from database", relationships.len());
         Ok(relationships)
     }
 
-    /// Save in a single transaction
+    /// Save multiple entities and relationships in a single transaction
     pub fn save_all_in_transaction(
         &self,
         entities: &[&dyn Entity],
         relationships: &[&Relationship],
     ) -> Result<()> {
-        // Get a fresh connection for this operation
-        let mut conn = self.new_connection()?;
+        info!("Saving {} entities and {} relationships in transaction to {}", 
+              entities.len(), relationships.len(), self.db_path);
+        
+        // Get a connection from the pool
+        let mut conn = self.get_connection()?;
         let tx = conn.transaction()?;
 
         // Process each entity
         for &entity in entities {
-            // Get entity data using our helper function
-            let entity_data = get_entity_data(entity)?;
+            // Get entity data using the entity's serialize_data method
+            let entity_data = entity.serialize_data()
+                .map_err(|e| anyhow::anyhow!("Failed to serialize entity data for {}: {}", entity.id().as_str(), e))?;
 
             // Serialize location data
             let location_json = if let Some(loc) = entity.location() {
-                serde_json::to_string(loc)?
+                serde_json::to_string(loc)
+                    .map_err(|e| anyhow::anyhow!("Failed to serialize location for {}: {}", entity.id().as_str(), e))?
             } else {
                 "null".to_string()
             };
 
             // Save entity to database
-            tx.execute(
+            match tx.execute(
                 "INSERT OR REPLACE INTO entities 
                 (id, name, entity_type, file_path, location, documentation, containing_entity, data)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -468,20 +575,29 @@ impl Database {
                         .map(|s| s.as_str()),
                     entity_data,
                 ],
-            )?;
+            ) {
+                Ok(_) => {
+                    debug!("Successfully saved entity {} in transaction", entity.id().as_str());
+                },
+                Err(e) => {
+                    error!("Failed to save entity {} in transaction: {}", entity.id().as_str(), e);
+                    return Err(anyhow::anyhow!("Transaction failed: {}", e));
+                }
+            }
         }
 
         // Process each relationship
         for relationship in relationships {
             // Serialize metadata
             let metadata_json = if !relationship.metadata.is_empty() {
-                Some(serde_json::to_string(&relationship.metadata)?)
+                Some(serde_json::to_string(&relationship.metadata)
+                    .map_err(|e| anyhow::anyhow!("Failed to serialize relationship metadata for {}: {}", relationship.id.0, e))?)
             } else {
                 None
             };
 
             // Save relationship to database
-            tx.execute(
+            match tx.execute(
                 "INSERT OR REPLACE INTO relationships 
                 (id, source_id, target_id, relationship_type, weight, metadata)
                 VALUES (?, ?, ?, ?, ?, ?)",
@@ -493,77 +609,28 @@ impl Database {
                     relationship.weight,
                     metadata_json,
                 ],
-            )?;
+            ) {
+                Ok(_) => {
+                    debug!("Successfully saved relationship {} in transaction", relationship.id.0);
+                },
+                Err(e) => {
+                    error!("Failed to save relationship {} in transaction: {}", relationship.id.0, e);
+                    return Err(anyhow::anyhow!("Transaction failed: {}", e));
+                }
+            }
         }
 
-        tx.commit()?;
-        Ok(())
-    }
-}
-
-/// Helper to extract data from entity, using entity_type to determine the data structure
-pub fn get_entity_data(entity: &dyn Entity) -> Result<String> {
-    match entity.entity_type() {
-        EntityType::Function | EntityType::Method => {
-            // Try to get data from a function entity
-            // We'll use a simple default structure rather than trying to downcast
-            let parameters = vec![];
-            let data = FunctionEntityData {
-                parameters,
-                return_type: None,
-                visibility: crate::graph::entity::Visibility::Public,
-                is_async: false,
-                is_static: false,
-                is_constructor: false,
-                is_abstract: false,
-            };
-            Ok(serde_json::to_string(&data)?)
+        match tx.commit() {
+            Ok(_) => {
+                info!("Successfully committed transaction with {} entities and {} relationships", 
+                     entities.len(), relationships.len());
+                Ok(())
+            },
+            Err(e) => {
+                error!("Failed to commit transaction: {}", e);
+                Err(anyhow::anyhow!("Failed to commit transaction: {}", e))
+            }
         }
-        EntityType::Class
-        | EntityType::Interface
-        | EntityType::Trait
-        | EntityType::Struct
-        | EntityType::Enum
-        | EntityType::Type => {
-            // Create a default TypeEntityData
-            let data = TypeEntityData {
-                fields: vec![],
-                methods: vec![],
-                supertypes: vec![],
-                visibility: crate::graph::entity::Visibility::Public,
-                is_abstract: false,
-            };
-            Ok(serde_json::to_string(&data)?)
-        }
-        EntityType::Module | EntityType::File => {
-            // Create a default ModuleEntityData
-            let data = ModuleEntityData {
-                path: entity.file_path().cloned().unwrap_or_default(),
-                children: vec![],
-                imports: vec![],
-            };
-            Ok(serde_json::to_string(&data)?)
-        }
-        EntityType::Variable | EntityType::Field | EntityType::Constant => {
-            // Create a default VariableEntityData
-            let data = VariableEntityData {
-                type_annotation: None,
-                visibility: crate::graph::entity::Visibility::Public,
-                is_const: entity.entity_type() == EntityType::Constant,
-                is_static: false,
-            };
-            Ok(serde_json::to_string(&data)?)
-        }
-        EntityType::DomainConcept => {
-            // Create a default DomainConceptEntityData
-            let data = DomainConceptEntityData {
-                attributes: vec![],
-                description: None,
-                confidence: 0.5,
-            };
-            Ok(serde_json::to_string(&data)?)
-        }
-        _ => Ok("{}".to_string()),
     }
 }
 
@@ -635,55 +702,14 @@ pub fn parse_relationship_type(type_str: &str) -> RelationshipType {
     }
 }
 
-// Serializable data structs for each entity type
-
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct FunctionEntityData {
-    pub parameters: Vec<crate::graph::entity::Parameter>,
-    pub return_type: Option<String>,
-    pub visibility: crate::graph::entity::Visibility,
-    pub is_async: bool,
-    pub is_static: bool,
-    pub is_constructor: bool,
-    pub is_abstract: bool,
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct TypeEntityData {
-    pub fields: Vec<EntityId>,
-    pub methods: Vec<EntityId>,
-    pub supertypes: Vec<EntityId>,
-    pub visibility: crate::graph::entity::Visibility,
-    pub is_abstract: bool,
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct ModuleEntityData {
-    pub path: String,
-    pub children: Vec<EntityId>,
-    pub imports: Vec<String>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct VariableEntityData {
-    pub type_annotation: Option<String>,
-    pub visibility: crate::graph::entity::Visibility,
-    pub is_const: bool,
-    pub is_static: bool,
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct DomainConceptEntityData {
-    pub attributes: Vec<String>,
-    pub description: Option<String>,
-    pub confidence: f32,
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::graph::entity::{Parameter, Visibility};
     use tempfile::tempdir;
+    use std::thread;
+    use std::sync::Arc;
 
     #[test]
     fn test_database_initialization() {
@@ -881,5 +907,126 @@ mod tests {
             relationships[0].relationship_type,
             RelationshipType::Contains
         ));
+    }
+    
+    #[test]
+    fn test_concurrent_saves() {
+        // Test concurrent access using the connection pool
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let db = Database::new(&db_path).unwrap();
+        let db_arc = Arc::new(db);
+        
+        // Number of threads to use
+        let thread_count = 10;
+        let mut handles = vec![];
+        
+        // Create multiple threads, each saving entities concurrently
+        for i in 0..thread_count {
+            let db_clone = db_arc.clone();
+            let handle = thread::spawn(move || {
+                // Create a unique entity for this thread
+                let id = EntityId::new(&format!("entity{}", i));
+                let base = BaseEntity::new(
+                    id.clone(),
+                    format!("Entity{}", i),
+                    EntityType::Function,
+                    Some("test.rs".to_string()),
+                );
+                
+                // Create a function entity
+                let function = FunctionEntity {
+                    base,
+                    parameters: vec![],
+                    return_type: Some(format!("Type{}", i)),
+                    visibility: Visibility::Public,
+                    is_async: false,
+                    is_static: false,
+                    is_constructor: false,
+                    is_abstract: false,
+                };
+                
+                // Save the entity
+                db_clone.save_entity(&function).unwrap();
+            });
+            
+            handles.push(handle);
+        }
+        
+        // Wait for all threads to complete
+        for handle in handles {
+            handle.join().unwrap();
+        }
+        
+        // Load entities and verify
+        let entities = db_arc.load_entities().unwrap();
+        
+        // Check that all entities were saved
+        assert_eq!(entities.len(), thread_count);
+        
+        // Verify each entity exists
+        for i in 0..thread_count {
+            let entity_id = format!("entity{}", i);
+            let entity = entities.iter().find(|e| e.id().as_str() == entity_id);
+            assert!(entity.is_some(), "Entity {} not found", entity_id);
+        }
+    }
+    
+    #[test]
+    fn test_transaction_integrity() {
+        // Test transaction integrity - all entities should be saved or none
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let db = Database::new(&db_path).unwrap();
+        
+        // Create 5 entities
+        let mut entities: Vec<Box<dyn Entity>> = Vec::new();
+        let mut entity_refs: Vec<&dyn Entity> = Vec::new();
+        
+        for i in 0..5 {
+            let id = EntityId::new(&format!("entity{}", i));
+            let base = BaseEntity::new(
+                id.clone(),
+                format!("Entity{}", i),
+                EntityType::Function,
+                Some("test.rs".to_string()),
+            );
+            
+            let function = FunctionEntity {
+                base,
+                parameters: vec![],
+                return_type: Some(format!("Type{}", i)),
+                visibility: Visibility::Public,
+                is_async: false,
+                is_static: false,
+                is_constructor: false,
+                is_abstract: false,
+            };
+            
+            entities.push(Box::new(function));
+        }
+        
+        // Get references for the transaction
+        for entity in &entities {
+            entity_refs.push(entity.as_ref());
+        }
+        
+        // Create a relationship
+        let rel = Relationship::new(
+            crate::graph::relationship::RelationshipId::new("rel1"),
+            EntityId::new("entity0"),
+            EntityId::new("entity1"),
+            RelationshipType::Calls,
+        );
+        
+        // Save all in a transaction
+        db.save_all_in_transaction(&entity_refs, &[&rel]).unwrap();
+        
+        // Load back and verify
+        let loaded_entities = db.load_entities().unwrap();
+        let loaded_relationships = db.load_relationships().unwrap();
+        
+        assert_eq!(loaded_entities.len(), 5);
+        assert_eq!(loaded_relationships.len(), 1);
     }
 }
