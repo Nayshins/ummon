@@ -115,7 +115,7 @@ pub trait Entity {
     }
     #[allow(dead_code)]
     fn metadata_mut(&mut self) -> &mut HashMap<String, String>;
-    
+
     /// Serialize the entity data to a string for database storage
     /// Default implementation provides empty JSON object
     fn serialize_data(&self) -> anyhow::Result<String> {
@@ -239,7 +239,7 @@ impl Entity for FunctionEntity {
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.base.metadata
     }
-    
+
     fn serialize_data(&self) -> anyhow::Result<String> {
         let data = FunctionEntityData {
             parameters: self.parameters.clone(),
@@ -303,7 +303,7 @@ impl Entity for TypeEntity {
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.base.metadata
     }
-    
+
     fn serialize_data(&self) -> anyhow::Result<String> {
         let data = TypeEntityData {
             fields: self.fields.clone(),
@@ -361,7 +361,7 @@ impl Entity for ModuleEntity {
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.base.metadata
     }
-    
+
     fn serialize_data(&self) -> anyhow::Result<String> {
         let data = ModuleEntityData {
             path: self.path.clone(),
@@ -419,7 +419,7 @@ impl Entity for VariableEntity {
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.base.metadata
     }
-    
+
     fn serialize_data(&self) -> anyhow::Result<String> {
         let data = VariableEntityData {
             type_annotation: self.type_annotation.clone(),
@@ -476,7 +476,7 @@ impl Entity for DomainConceptEntity {
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.base.metadata
     }
-    
+
     fn serialize_data(&self) -> anyhow::Result<String> {
         let data = DomainConceptEntityData {
             attributes: self.attributes.clone(),

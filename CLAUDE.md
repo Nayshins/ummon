@@ -21,6 +21,11 @@ cargo test <test_name>     # Run specific test
 cargo fmt
 ```
 
+## Pre-Commit Checklist
+- **ALWAYS** run `cargo fmt` before committing code
+- Run `cargo clippy` to check for code improvements
+- Ensure all tests pass with `cargo test`
+
 ## Test Structure
 Tests have been set up as inline modules within each source file using Rust's `#[cfg(test)]` attribute. Test files that need completion:
 

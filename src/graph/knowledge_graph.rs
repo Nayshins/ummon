@@ -13,16 +13,16 @@ use super::relationship::{Relationship, RelationshipStore, RelationshipType};
 pub trait DatabaseConnection {
     /// Save a single entity to the database
     fn save_entity(&self, entity: &dyn Entity) -> Result<()>;
-    
+
     /// Save a single relationship to the database
     fn save_relationship(&self, relationship: &Relationship) -> Result<()>;
-    
+
     /// Load all entities from the database
     fn load_entities(&self) -> Result<Vec<Box<dyn Entity>>>;
-    
+
     /// Load all relationships from the database
     fn load_relationships(&self) -> Result<Vec<Relationship>>;
-    
+
     /// Save multiple entities and relationships in a single transaction
     fn save_all_in_transaction(
         &self,
