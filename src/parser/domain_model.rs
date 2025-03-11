@@ -42,23 +42,23 @@ pub enum RelationType {
 }
 
 pub trait DomainModelBuilder {
-    fn extract_domain_model(
-        &self,
-        content: &str,
-        file_path: &str,
-    ) -> impl std::future::Future<Output = Result<Vec<DomainEntity>>> + Send;
+    fn extract_domain_model<'a>(
+        &'a self,
+        content: &'a str,
+        file_path: &'a str,
+    ) -> impl std::future::Future<Output = Result<Vec<DomainEntity>>> + Send + 'a;
 }
 
 /// Builds a domain model using an LLM
 pub struct LlmDomainModelBuilder {}
 
 impl DomainModelBuilder for LlmDomainModelBuilder {
-    fn extract_domain_model(
-        &self,
-        _content: &str,
-        _file_path: &str,
-    ) -> impl std::future::Future<Output = Result<Vec<DomainEntity>>> + Send {
-        async {
+    fn extract_domain_model<'a>(
+        &'a self,
+        _content: &'a str,
+        _file_path: &'a str,
+    ) -> impl std::future::Future<Output = Result<Vec<DomainEntity>>> + Send + 'a {
+        async move {
             // This is just a placeholder implementation
             Ok(Vec::new())
         }
