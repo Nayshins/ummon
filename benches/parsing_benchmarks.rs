@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::fs;
 use std::io::Write;
 use std::path::Path;
@@ -224,7 +224,7 @@ public class Point {
 /// Helper function to create a temporary file for a specific language
 fn create_temp_file(language: &str) -> tempfile::TempDir {
     let dir = tempdir().expect("Failed to create temp directory");
-    
+
     let (file_name, content) = match language {
         "rust" => ("sample.rs", RUST_SAMPLE),
         "python" => ("sample.py", PYTHON_SAMPLE),
@@ -232,11 +232,12 @@ fn create_temp_file(language: &str) -> tempfile::TempDir {
         "java" => ("Sample.java", JAVA_SAMPLE),
         _ => panic!("Unsupported language: {}", language),
     };
-    
+
     let file_path = dir.path().join(file_name);
     let mut file = fs::File::create(&file_path).expect("Failed to create temp file");
-    file.write_all(content.as_bytes()).expect("Failed to write to temp file");
-    
+    file.write_all(content.as_bytes())
+        .expect("Failed to write to temp file");
+
     dir
 }
 
@@ -244,10 +245,10 @@ fn create_temp_file(language: &str) -> tempfile::TempDir {
 pub fn bench_parsing(c: &mut Criterion) {
     // Create a benchmark group for parser benchmarks
     let mut group = c.benchmark_group("parser_benchmarks");
-    
+
     // Languages to benchmark
     let languages = vec!["rust", "python", "javascript", "java"];
-    
+
     for lang in languages {
         // Create a temporary file for the language
         let temp_dir = create_temp_file(lang);
@@ -258,48 +259,34 @@ pub fn bench_parsing(c: &mut Criterion) {
             "java" => temp_dir.path().join("Sample.java"),
             _ => panic!("Unsupported language: {}", lang),
         };
-        
+
         // Read the file content
         let content = fs::read_to_string(&file_path).expect("Failed to read temp file");
         let file_path_str = file_path.to_string_lossy().to_string();
-        
+
         // Create a parser for the language
         let mut parser = get_parser_for_file(&file_path).expect("Failed to get parser");
-        
+
         // Benchmark function parsing
         group.bench_with_input(
             BenchmarkId::new("parse_functions", lang),
             &lang,
             |b, _lang| {
-                b.iter(|| {
-                    parser.parse_functions(&content, &file_path_str).unwrap()
-                });
+                b.iter(|| parser.parse_functions(&content, &file_path_str).unwrap());
             },
         );
-        
+
         // Benchmark type parsing
-        group.bench_with_input(
-            BenchmarkId::new("parse_types", lang),
-            &lang,
-            |b, _lang| {
-                b.iter(|| {
-                    parser.parse_types(&content, &file_path_str).unwrap()
-                });
-            },
-        );
-        
+        group.bench_with_input(BenchmarkId::new("parse_types", lang), &lang, |b, _lang| {
+            b.iter(|| parser.parse_types(&content, &file_path_str).unwrap());
+        });
+
         // Benchmark call parsing
-        group.bench_with_input(
-            BenchmarkId::new("parse_calls", lang),
-            &lang,
-            |b, _lang| {
-                b.iter(|| {
-                    parser.parse_calls(&content).unwrap()
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("parse_calls", lang), &lang, |b, _lang| {
+            b.iter(|| parser.parse_calls(&content).unwrap());
+        });
     }
-    
+
     group.finish();
 }
 

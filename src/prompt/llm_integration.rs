@@ -62,7 +62,7 @@ pub fn get_llm_config(cli_provider: Option<&str>, cli_model: Option<&str>) -> Ll
         .or_else(|| std::env::var("LLM_PROVIDER").ok())
         .unwrap_or_else(|| "openrouter".to_string());
     let provider = LlmProvider::from_str(&provider_str).unwrap_or(LlmProvider::OpenRouter);
-    
+
     let api_key = match provider {
         LlmProvider::OpenRouter => std::env::var("OPENROUTER_API_KEY").unwrap_or_default(),
         LlmProvider::OpenAI => std::env::var("OPENAI_API_KEY").unwrap_or_default(),
@@ -71,23 +71,21 @@ pub fn get_llm_config(cli_provider: Option<&str>, cli_model: Option<&str>) -> Ll
         LlmProvider::Ollama => String::new(),
         LlmProvider::Mock => String::new(),
     };
-    
+
     let model = cli_model
         .map(|s| s.to_string())
         .or_else(|| std::env::var("LLM_MODEL").ok())
-        .unwrap_or_else(|| {
-            match provider {
-                LlmProvider::OpenRouter => "anthropic/claude-3-5-haiku-20241022".to_string(),
-                LlmProvider::OpenAI => "gpt-4-turbo".to_string(),
-                LlmProvider::Anthropic => "claude-3-5-haiku-20241022".to_string(),
-                LlmProvider::GoogleVertexAI => "gemini-1.5-pro".to_string(),
-                LlmProvider::Ollama => "llama3".to_string(),
-                LlmProvider::Mock => "mock".to_string(),
-            }
+        .unwrap_or_else(|| match provider {
+            LlmProvider::OpenRouter => "anthropic/claude-3-5-haiku-20241022".to_string(),
+            LlmProvider::OpenAI => "gpt-4-turbo".to_string(),
+            LlmProvider::Anthropic => "claude-3-5-haiku-20241022".to_string(),
+            LlmProvider::GoogleVertexAI => "gemini-1.5-pro".to_string(),
+            LlmProvider::Ollama => "llama3".to_string(),
+            LlmProvider::Mock => "mock".to_string(),
         });
-        
+
     let endpoint_url = std::env::var("LLM_ENDPOINT").ok();
-    
+
     LlmConfig {
         provider,
         api_key,
