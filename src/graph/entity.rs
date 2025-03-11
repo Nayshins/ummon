@@ -118,6 +118,7 @@ pub trait Entity {
 
     /// Serialize the entity data to a string for database storage
     /// Default implementation provides empty JSON object
+    #[allow(dead_code)]
     fn serialize_data(&self) -> anyhow::Result<String> {
         Ok("{}".to_string())
     }

@@ -10,6 +10,7 @@ use super::relationship::{Relationship, RelationshipStore, RelationshipType};
 
 /// A trait for database connection implementations.
 /// Provides methods for saving and loading entities and relationships.
+#[allow(dead_code)]
 pub trait DatabaseConnection {
     /// Save a single entity to the database
     fn save_entity(&self, entity: &dyn Entity) -> Result<()>;
