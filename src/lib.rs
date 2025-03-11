@@ -5,9 +5,11 @@ pub mod mcp_core;
 pub mod mcp_server;
 pub mod parser;
 pub mod prompt;
+pub mod query;
 
 // Re-export core types for convenience
 pub use graph::entity;
 pub use graph::knowledge_graph::KnowledgeGraph;
 pub use graph::relationship;
 pub use parser::language_support;
+pub use query::{parse_query, OutputFormat, QueryExecutor, ResultFormatter};
