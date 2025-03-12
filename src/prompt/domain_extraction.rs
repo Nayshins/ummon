@@ -10,6 +10,12 @@ pub struct LlmModelExtractor {
     pub config: LlmConfig,
 }
 
+impl Default for LlmModelExtractor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LlmModelExtractor {
     pub fn new() -> Self {
         // Create default config
@@ -75,104 +81,99 @@ impl LlmModelExtractor {
 }
 
 impl DomainModelBuilder for LlmModelExtractor {
-    fn extract_domain_model<'a>(
+    async fn extract_domain_model<'a>(
         &'a self,
         content: &'a str,
         file_path: &'a str,
-    ) -> impl std::future::Future<Output = Result<Vec<DomainEntity>>> + Send + 'a {
-        async move {
-            // Check if api key is set (for providers that need it)
-            let needs_api_key = match self.config.provider {
-                LlmProvider::Ollama | LlmProvider::Mock => false,
-                _ => true,
-            };
+    ) -> Result<Vec<DomainEntity>> {
+        // Check if api key is set (for providers that need it)
+        let needs_api_key = !matches!(self.config.provider, LlmProvider::Ollama | LlmProvider::Mock);
 
-            if needs_api_key && self.config.api_key.is_empty() {
-                tracing::info!(
-                    "Using mock domain entity (API key not set) for {}",
-                    file_path
-                );
-
-                // Return a mock domain entity when no API key is provided
-                return Ok(vec![DomainEntity {
-                    name: format!(
-                        "MockEntity_{}",
-                        file_path.split('/').last().unwrap_or("unknown")
-                    ),
-                    entity_type: EntityType::Class,
-                    attributes: [
-                        ("id".to_string(), AttributeType::String),
-                        ("name".to_string(), AttributeType::String),
-                    ]
-                    .into_iter()
-                    .collect(),
-                    relationships: vec![],
-                    description: Some(
-                        "This is a mock domain entity because no API key was provided".to_string(),
-                    ),
-                }]);
-            }
-
-            // Truncate content if it's too long (limit to ~10k chars to avoid token limits)
-            let truncated_content = if content.len() > 10000 {
-                tracing::info!("Content too large, truncating for LLM analysis");
-                // Take the first 8k and last 2k characters to capture more of the important structure
-                // Usually class/type definitions are at the beginning of files
-                let first_size = 8000.min(content.len());
-                let first = &content[..first_size];
-
-                if content.len() > first_size {
-                    let remaining = content.len() - first_size;
-                    let last_size = 2000.min(remaining);
-                    let last = &content[content.len() - last_size..];
-                    format!("{}\n\n... [content truncated] ...\n\n{}", first, last)
-                } else {
-                    first.to_string()
-                }
-            } else {
-                content.to_string()
-            };
-
-            // Create a prompt for the LLM
-            let prompt = build_domain_extraction_prompt(&truncated_content, file_path);
-
+        if needs_api_key && self.config.api_key.is_empty() {
             tracing::info!(
-                "Sending request to {:?} for domain extraction...",
-                self.config.provider
+                "Using mock domain entity (API key not set) for {}",
+                file_path
             );
 
-            // Directly use await since we're in an async function now
-            match crate::prompt::llm_integration::query_llm(&prompt, &self.config).await {
-                Ok(response) => {
-                    // Try to parse the LLM response as JSON array of domain entities
-                    match serde_json::from_str::<Vec<serde_json::Value>>(&response) {
-                        Ok(entities_json) => {
-                            // Parse each entity in the JSON array
-                            let mut domain_entities = Vec::new();
+            // Return a mock domain entity when no API key is provided
+            return Ok(vec![DomainEntity {
+                name: format!(
+                    "MockEntity_{}",
+                    file_path.split('/').last().unwrap_or("unknown")
+                ),
+                entity_type: EntityType::Class,
+                attributes: [
+                    ("id".to_string(), AttributeType::String),
+                    ("name".to_string(), AttributeType::String),
+                ]
+                .into_iter()
+                .collect(),
+                relationships: vec![],
+                description: Some(
+                    "This is a mock domain entity because no API key was provided".to_string(),
+                ),
+            }]);
+        }
 
-                            for entity_json in entities_json {
-                                if let Some(entity) = parse_entity_from_json(entity_json) {
-                                    domain_entities.push(entity);
-                                }
-                            }
+        // Truncate content if it's too long (limit to ~10k chars to avoid token limits)
+        let truncated_content = if content.len() > 10000 {
+            tracing::info!("Content too large, truncating for LLM analysis");
+            // Take the first 8k and last 2k characters to capture more of the important structure
+            // Usually class/type definitions are at the beginning of files
+            let first_size = 8000.min(content.len());
+            let first = &content[..first_size];
 
-                            if domain_entities.is_empty() {
-                                tracing::warn!("No valid entities parsed from LLM response");
-                                create_mock_entity(file_path)
-                            } else {
-                                Ok(domain_entities)
+            if content.len() > first_size {
+                let remaining = content.len() - first_size;
+                let last_size = 2000.min(remaining);
+                let last = &content[content.len() - last_size..];
+                format!("{}\n\n... [content truncated] ...\n\n{}", first, last)
+            } else {
+                first.to_string()
+            }
+        } else {
+            content.to_string()
+        };
+
+        // Create a prompt for the LLM
+        let prompt = build_domain_extraction_prompt(&truncated_content, file_path);
+
+        tracing::info!(
+            "Sending request to {:?} for domain extraction...",
+            self.config.provider
+        );
+
+        // Directly use await since we're in an async function now
+        match crate::prompt::llm_integration::query_llm(&prompt, &self.config).await {
+            Ok(response) => {
+                // Try to parse the LLM response as JSON array of domain entities
+                match serde_json::from_str::<Vec<serde_json::Value>>(&response) {
+                    Ok(entities_json) => {
+                        // Parse each entity in the JSON array
+                        let mut domain_entities = Vec::new();
+
+                        for entity_json in entities_json {
+                            if let Some(entity) = parse_entity_from_json(entity_json) {
+                                domain_entities.push(entity);
                             }
                         }
-                        Err(e) => {
-                            tracing::error!("Error parsing LLM response as JSON: {}", e);
+
+                        if domain_entities.is_empty() {
+                            tracing::warn!("No valid entities parsed from LLM response");
                             create_mock_entity(file_path)
+                        } else {
+                            Ok(domain_entities)
                         }
                     }
+                    Err(e) => {
+                        tracing::error!("Error parsing LLM response as JSON: {}", e);
+                        create_mock_entity(file_path)
+                    }
                 }
-                Err(e) => {
-                    tracing::error!("Error calling LLM API: {}", e);
-                    create_mock_entity(file_path)
-                }
+            }
+            Err(e) => {
+                tracing::error!("Error calling LLM API: {}", e);
+                create_mock_entity(file_path)
             }
         }
     }
@@ -183,9 +184,7 @@ fn create_mock_entity(file_path: &str) -> Result<Vec<DomainEntity>> {
     let file_name = file_path.split('/').last().unwrap_or("unknown");
 
     // Generate domain entity based on the file name
-    let entity_type = if file_name.contains("entity") {
-        EntityType::Class
-    } else if file_name.contains("model") {
+    let entity_type = if file_name.contains("entity") || file_name.contains("model") {
         EntityType::Class
     } else if file_name.contains("struct") {
         EntityType::Struct
@@ -199,7 +198,7 @@ fn create_mock_entity(file_path: &str) -> Result<Vec<DomainEntity>> {
     Ok(vec![DomainEntity {
         name: format!(
             "{}Model",
-            file_name.split('.').next().unwrap_or("Domain").to_string()
+            file_name.split('.').next().unwrap_or("Domain")
         ),
         entity_type,
         attributes: [

@@ -10,12 +10,7 @@ use crate::graph::entity::{
     FunctionEntity, FunctionEntityData, ModuleEntity, ModuleEntityData, TypeEntity, TypeEntityData,
     VariableEntity, VariableEntityData,
 };
-use crate::graph::knowledge_graph::DatabaseConnection;
 use crate::graph::relationship::{Relationship, RelationshipType};
-
-/// Database schema version - increment when schema changes
-#[allow(dead_code)]
-const CURRENT_SCHEMA_VERSION: i32 = 1;
 
 /// Get a database instance - this is a convenience method that just calls Database::new
 pub fn get_database(path: &str) -> Result<Database> {
@@ -34,32 +29,6 @@ impl std::fmt::Debug for Database {
             .field("pool", &"SQLite Connection Pool")
             .field("db_path", &self.db_path)
             .finish()
-    }
-}
-
-impl DatabaseConnection for Database {
-    fn save_entity(&self, entity: &dyn Entity) -> Result<()> {
-        Database::save_entity(self, entity)
-    }
-
-    fn save_relationship(&self, relationship: &Relationship) -> Result<()> {
-        Database::save_relationship(self, relationship)
-    }
-
-    fn load_entities(&self) -> Result<Vec<Box<dyn Entity>>> {
-        Database::load_entities(self)
-    }
-
-    fn load_relationships(&self) -> Result<Vec<Relationship>> {
-        Database::load_relationships(self)
-    }
-
-    fn save_all_in_transaction(
-        &self,
-        entities: &[&dyn Entity],
-        relationships: &[&Relationship],
-    ) -> Result<()> {
-        Database::save_all_in_transaction(self, entities, relationships)
     }
 }
 
@@ -156,6 +125,10 @@ impl Database {
     }
 
     /// Save an entity to the database
+    /// 
+    /// Note: This method is part of the storage API but not currently used.
+    /// It is preserved for future functionality.
+    #[allow(dead_code)]
     pub fn save_entity(&self, entity: &dyn Entity) -> Result<()> {
         info!("Saving entity {} to {}", entity.id().as_str(), self.db_path);
 
@@ -223,6 +196,10 @@ impl Database {
     }
 
     /// Save a relationship to the database
+    /// 
+    /// Note: This method is part of the storage API but not currently used.
+    /// It is preserved for future functionality.
+    #[allow(dead_code)]
     pub fn save_relationship(&self, relationship: &Relationship) -> Result<()> {
         info!(
             "Saving relationship {} from {} to {}",

@@ -13,8 +13,6 @@ pub use parser::parse_query;
 pub use parser::QueryType;
 
 use anyhow::Result;
-use tracing;
-
 use crate::{graph::knowledge_graph::KnowledgeGraph, prompt::llm_integration::get_llm_config};
 
 /// Process a query string and return formatted results
@@ -27,7 +25,7 @@ pub async fn process_query(
     llm_model: Option<&str>,
 ) -> Result<String> {
     // Set up the formatter
-    let format = OutputFormat::from_str(format_str);
+    let format = format_str.parse().unwrap_or(OutputFormat::Text);
     let formatter = ResultFormatter::new(kg, format);
 
     // If natural language is enabled, translate query first

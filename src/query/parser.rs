@@ -146,10 +146,10 @@ pub fn parse_query(input: &str) -> Result<QueryType> {
                 .ok_or_else(|| anyhow!("Empty query"))?;
 
             match inner_rule.as_rule() {
-                Rule::select_query => return parse_select_query(inner_rule),
-                Rule::traversal_query => return parse_traversal_query(inner_rule),
+                Rule::select_query => parse_select_query(inner_rule),
+                Rule::traversal_query => parse_traversal_query(inner_rule),
                 _ => {
-                    return Err(anyhow!(
+                    Err(anyhow!(
                         "Expected select or traversal query, got {:?}",
                         inner_rule.as_rule()
                     ))
@@ -282,67 +282,64 @@ fn parse_relationship(pair: Pair<Rule>) -> Result<RelationshipSelector> {
 }
 
 fn parse_condition(pair: Pair<Rule>) -> Result<ConditionNode> {
-    match pair.as_rule() {
-        Rule::condition => {
-            let mut inner_pairs = pair.into_inner();
+    if pair.as_rule() == Rule::condition {
+        let mut inner_pairs = pair.into_inner();
 
-            if let Some(first_pair) = inner_pairs.next() {
-                match first_pair.as_rule() {
-                    Rule::simple_condition => {
-                        let simple_condition = parse_simple_condition(first_pair)?;
+        if let Some(first_pair) = inner_pairs.next() {
+            match first_pair.as_rule() {
+                Rule::simple_condition => {
+                    let simple_condition = parse_simple_condition(first_pair)?;
 
-                        // Check if there's a logical operator and another condition
-                        if let Some(op_pair) = inner_pairs.next() {
-                            if op_pair.as_rule() == Rule::logical_op {
-                                let op = op_pair.as_str();
+                    // Check if there's a logical operator and another condition
+                    if let Some(op_pair) = inner_pairs.next() {
+                        if op_pair.as_rule() == Rule::logical_op {
+                            let op = op_pair.as_str();
 
-                                if let Some(right_condition_pair) = inner_pairs.next() {
-                                    let right_condition = parse_condition(right_condition_pair)?;
+                            if let Some(right_condition_pair) = inner_pairs.next() {
+                                let right_condition = parse_condition(right_condition_pair)?;
 
-                                    return match op {
-                                        "and" => Ok(ConditionNode::And(
-                                            Box::new(simple_condition),
-                                            Box::new(right_condition),
-                                        )),
-                                        "or" => Ok(ConditionNode::Or(
-                                            Box::new(simple_condition),
-                                            Box::new(right_condition),
-                                        )),
-                                        "not" => Ok(ConditionNode::Not(Box::new(right_condition))),
-                                        _ => Err(anyhow!("Unknown logical operator: '{}'", op)),
-                                    };
-                                }
+                                return match op {
+                                    "and" => Ok(ConditionNode::And(
+                                        Box::new(simple_condition),
+                                        Box::new(right_condition),
+                                    )),
+                                    "or" => Ok(ConditionNode::Or(
+                                        Box::new(simple_condition),
+                                        Box::new(right_condition),
+                                    )),
+                                    "not" => Ok(ConditionNode::Not(Box::new(right_condition))),
+                                    _ => Err(anyhow!("Unknown logical operator: '{}'", op)),
+                                };
                             }
                         }
+                    }
 
-                        // If no logical operator, just return the simple condition
-                        return Ok(simple_condition);
-                    }
-                    Rule::condition => {
-                        // This is a nested condition inside parentheses
-                        let inner_condition = parse_condition(first_pair)?;
-                        return Ok(inner_condition);
-                    }
-                    Rule::has_keyword => {
-                        if let Some(attr_pair) = inner_pairs.next() {
-                            if attr_pair.as_rule() == Rule::attribute {
-                                return Ok(ConditionNode::HasAttribute(
-                                    attr_pair.as_str().to_string(),
-                                ));
-                            }
+                    // If no logical operator, just return the simple condition
+                    return Ok(simple_condition);
+                }
+                Rule::condition => {
+                    // This is a nested condition inside parentheses
+                    let inner_condition = parse_condition(first_pair)?;
+                    return Ok(inner_condition);
+                }
+                Rule::has_keyword => {
+                    if let Some(attr_pair) = inner_pairs.next() {
+                        if attr_pair.as_rule() == Rule::attribute {
+                            return Ok(ConditionNode::HasAttribute(
+                                attr_pair.as_str().to_string(),
+                            ));
                         }
-                        return Err(anyhow!("Expected attribute after 'has'"));
                     }
-                    _ => {
-                        return Err(anyhow!(
-                            "Unexpected rule in condition: {:?}",
-                            first_pair.as_rule()
-                        ))
-                    }
+                    return Err(anyhow!("Expected attribute after 'has'"));
+                }
+                _ => {
+                    return Err(anyhow!(
+                        "Unexpected rule in condition: {:?}",
+                        first_pair.as_rule()
+                    ))
                 }
             }
         }
-        _ => {}
     }
 
     Err(anyhow!("Invalid condition"))

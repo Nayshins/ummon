@@ -137,13 +137,13 @@ impl RelationshipStore {
         // Add to outgoing index
         self.outgoing_relationships
             .entry(source_id)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(rel_id.clone());
 
         // Add to incoming index
         self.incoming_relationships
             .entry(target_id)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(rel_id.clone());
 
         // Add to type index
@@ -154,12 +154,11 @@ impl RelationshipStore {
 
         self.relationship_types
             .entry(key)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(rel_id);
     }
 
     /// Get a relationship by ID
-
     /// Get all outgoing relationships from an entity
     pub fn get_outgoing_relationships(&self, entity_id: &EntityId) -> Vec<&Relationship> {
         match self.outgoing_relationships.get(entity_id) {

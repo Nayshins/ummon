@@ -5,6 +5,12 @@ pub struct JavaParser {
     parser: Parser,
 }
 
+impl Default for JavaParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl JavaParser {
     pub fn new() -> Self {
         let mut parser = Parser::new();
@@ -12,6 +18,7 @@ impl JavaParser {
         Self { parser }
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn traverse_node<F>(&self, node: Node, f: &mut F)
     where
         F: FnMut(Node),
@@ -430,23 +437,10 @@ impl LanguageParser for JavaParser {
                             }
                         }
 
-                        // Extract arguments
-                        let mut arguments = Vec::new();
-                        if let Some(args_node) = node.child_by_field_name("arguments") {
-                            for i in 0..args_node.child_count() {
-                                if let Some(arg_node) = args_node.child(i) {
-                                    if let Ok(arg_text) = arg_node.utf8_text(content.as_bytes()) {
-                                        arguments.push(arg_text.to_string());
-                                    }
-                                }
-                            }
-                        }
 
                         calls.push(CallReference {
-                            caller_location: self.extract_location(node),
                             callee_name: name.to_string(),
                             fully_qualified_name,
-                            arguments,
                         });
                     }
                 }
@@ -562,7 +556,7 @@ impl LanguageParser for JavaParser {
         let lines: Vec<&str> = content.lines().collect();
 
         // The entity starts at this line
-        let start_line = location.start.line as usize;
+        let start_line = location.start.line;
 
         // Check for out of bounds
         if start_line >= lines.len() || start_line == 0 {

@@ -47,7 +47,7 @@ where
             .reader
             .read_line(&mut line)
             .await
-            .map_err(|e| TransportError::IoError(e))?;
+            .map_err(TransportError::IoError)?;
 
         // Check if we actually read any bytes (0 means EOF)
         if bytes_read == 0 {
@@ -90,15 +90,15 @@ where
         writer
             .write_all(json.as_bytes())
             .await
-            .map_err(|e| TransportError::IoError(e))?;
+            .map_err(TransportError::IoError)?;
         writer
             .write_all(b"\n")
             .await
-            .map_err(|e| TransportError::IoError(e))?;
+            .map_err(TransportError::IoError)?;
         writer
             .flush()
             .await
-            .map_err(|e| TransportError::IoError(e))?;
+            .map_err(TransportError::IoError)?;
 
         Ok(())
     }

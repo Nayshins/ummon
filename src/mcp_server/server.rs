@@ -157,7 +157,7 @@ impl<R: Router> Server<R> {
                     ServerError::MethodNotFound(format!("Tool not found: {}", name))
                 }
                 ToolError::InvalidParams(msg) => ServerError::InvalidParams(msg),
-                ToolError::ExecutionFailed(msg) | ToolError::Internal(msg) => {
+                ToolError::ExecutionFailed(msg) => {
                     ServerError::Router(msg)
                 }
             })?;
@@ -196,7 +196,6 @@ impl<R: Router> Server<R> {
                 ServerError::MethodNotFound(format!("Resource not found: {}", uri))
             }
             ResourceError::PermissionDenied(msg)
-            | ResourceError::InvalidResource(msg)
             | ResourceError::Internal(msg) => ServerError::Router(msg),
         })?;
 
@@ -230,7 +229,6 @@ impl<R: Router> Server<R> {
                     ServerError::MethodNotFound(format!("Resource not found: {}", uri))
                 }
                 ResourceError::PermissionDenied(msg)
-                | ResourceError::InvalidResource(msg)
                 | ResourceError::Internal(msg) => ServerError::Router(msg),
             })?;
 

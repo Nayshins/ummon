@@ -46,6 +46,12 @@ pub struct CapabilitiesBuilder {
     resources_write: bool,
 }
 
+impl Default for CapabilitiesBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CapabilitiesBuilder {
     pub fn new() -> Self {
         Self {
@@ -116,19 +122,6 @@ impl Content {
     pub fn text(content: impl Into<String>) -> Self {
         Content::Text(content.into())
     }
-
-    #[allow(dead_code)]
-    pub fn image(url: impl Into<String>, alt: Option<impl Into<String>>) -> Self {
-        Content::Image {
-            url: url.into(),
-            alt: alt.map(|a| a.into()),
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn json(value: impl Into<Value>) -> Self {
-        Content::Json(value.into())
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -156,14 +149,6 @@ pub struct ToolCallResult {
 }
 
 // JSON-RPC Error Codes
-#[allow(dead_code)]
-pub const PARSE_ERROR: i32 = -32700;
-#[allow(dead_code)]
-pub const INVALID_REQUEST: i32 = -32600;
 pub const METHOD_NOT_FOUND: i32 = -32601;
 pub const INVALID_PARAMS: i32 = -32602;
 pub const INTERNAL_ERROR: i32 = -32603;
-#[allow(dead_code)]
-pub const SERVER_ERROR_START: i32 = -32000;
-#[allow(dead_code)]
-pub const SERVER_ERROR_END: i32 = -32099;

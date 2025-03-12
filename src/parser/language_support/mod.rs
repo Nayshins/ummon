@@ -173,10 +173,6 @@ pub trait LanguageParser: Send {
 pub struct CallReference {
     pub callee_name: String,
     pub fully_qualified_name: Option<String>,
-    #[allow(dead_code)]
-    pub caller_location: Location,
-    #[allow(dead_code)]
-    pub arguments: Vec<String>,
 }
 
 /// Get the appropriate parser for a given file
