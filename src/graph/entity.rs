@@ -124,10 +124,10 @@ pub trait Entity {
     /// Note: This method is required for the Entity trait but not currently used.
     #[allow(dead_code)]
     fn metadata_mut(&mut self) -> &mut HashMap<String, String>;
-    
+
     /// Serialize the entity data to a string for database storage
     /// Default implementation provides empty JSON object
-    /// 
+    ///
     /// Note: This method is used by the Database::save_entity method which is currently not in use.
     /// It is preserved for future functionality.
     fn serialize_data(&self) -> anyhow::Result<String> {
@@ -258,7 +258,7 @@ impl Entity for FunctionEntity {
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.base.metadata
     }
-    
+
     fn serialize_data(&self) -> anyhow::Result<String> {
         let data = FunctionEntityData {
             parameters: self.parameters.clone(),
@@ -327,7 +327,7 @@ impl Entity for TypeEntity {
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.base.metadata
     }
-    
+
     fn serialize_data(&self) -> anyhow::Result<String> {
         let data = TypeEntityData {
             fields: self.fields.clone(),
@@ -388,7 +388,7 @@ impl Entity for ModuleEntity {
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.base.metadata
     }
-    
+
     fn serialize_data(&self) -> anyhow::Result<String> {
         let data = ModuleEntityData {
             path: self.path.clone(),
@@ -450,7 +450,7 @@ impl Entity for VariableEntity {
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.base.metadata
     }
-    
+
     fn serialize_data(&self) -> anyhow::Result<String> {
         let data = VariableEntityData {
             type_annotation: self.type_annotation.clone(),
@@ -514,7 +514,7 @@ impl Entity for DomainConceptEntity {
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.base.metadata
     }
-    
+
     fn serialize_data(&self) -> anyhow::Result<String> {
         let data = DomainConceptEntityData {
             attributes: self.attributes.clone(),
@@ -524,7 +524,6 @@ impl Entity for DomainConceptEntity {
         serde_json::to_string(&data).map_err(Into::into)
     }
 }
-
 
 #[cfg(test)]
 mod tests {

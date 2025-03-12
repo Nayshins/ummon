@@ -152,10 +152,7 @@ impl RelationshipStore {
             _ => rel_type,
         };
 
-        self.relationship_types
-            .entry(key)
-            .or_default()
-            .push(rel_id);
+        self.relationship_types.entry(key).or_default().push(rel_id);
     }
 
     /// Get a relationship by ID

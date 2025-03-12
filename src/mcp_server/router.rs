@@ -361,9 +361,7 @@ impl UmmonRouter {
                     .unwrap_or_else(|| &target_id_str);
 
                 // Store the relationship
-                let entry = relationship_map
-                    .entry(current_id.clone())
-                    .or_default();
+                let entry = relationship_map.entry(current_id.clone()).or_default();
                 entry.push((
                     rel.relationship_type.to_string(),
                     other_id.clone(),
@@ -531,10 +529,7 @@ impl UmmonRouter {
                     let parent = parts[parts.len() - 2].to_string();
                     let child = parts[parts.len() - 1].to_string();
 
-                    module_structure
-                        .entry(parent)
-                        .or_default()
-                        .push(child);
+                    module_structure.entry(parent).or_default().push(child);
                 }
             }
         }

@@ -157,9 +157,7 @@ impl<R: Router> Server<R> {
                     ServerError::MethodNotFound(format!("Tool not found: {}", name))
                 }
                 ToolError::InvalidParams(msg) => ServerError::InvalidParams(msg),
-                ToolError::ExecutionFailed(msg) => {
-                    ServerError::Router(msg)
-                }
+                ToolError::ExecutionFailed(msg) => ServerError::Router(msg),
             })?;
 
         let result = ToolCallResult { content };
@@ -195,8 +193,9 @@ impl<R: Router> Server<R> {
             ResourceError::NotFound(uri) => {
                 ServerError::MethodNotFound(format!("Resource not found: {}", uri))
             }
-            ResourceError::PermissionDenied(msg)
-            | ResourceError::Internal(msg) => ServerError::Router(msg),
+            ResourceError::PermissionDenied(msg) | ResourceError::Internal(msg) => {
+                ServerError::Router(msg)
+            }
         })?;
 
         serde_json::to_value(content).map_err(|e| {
@@ -228,8 +227,9 @@ impl<R: Router> Server<R> {
                 ResourceError::NotFound(uri) => {
                     ServerError::MethodNotFound(format!("Resource not found: {}", uri))
                 }
-                ResourceError::PermissionDenied(msg)
-                | ResourceError::Internal(msg) => ServerError::Router(msg),
+                ResourceError::PermissionDenied(msg) | ResourceError::Internal(msg) => {
+                    ServerError::Router(msg)
+                }
             })?;
 
         Ok(Value::Bool(true))

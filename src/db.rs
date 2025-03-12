@@ -125,7 +125,7 @@ impl Database {
     }
 
     /// Save an entity to the database
-    /// 
+    ///
     /// Note: This method is part of the storage API but not currently used.
     /// It is preserved for future functionality.
     #[allow(dead_code)]
@@ -196,7 +196,7 @@ impl Database {
     }
 
     /// Save a relationship to the database
-    /// 
+    ///
     /// Note: This method is part of the storage API but not currently used.
     /// It is preserved for future functionality.
     #[allow(dead_code)]

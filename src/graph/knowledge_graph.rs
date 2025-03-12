@@ -465,7 +465,7 @@ impl KnowledgeGraph {
             .filter_map(|rel| self.get_entity(&rel.target_id))
             .collect()
     }
-    
+
     /// Find paths between entities using an iterative approach to avoid stack overflow
     pub fn find_paths(
         &self,
@@ -562,7 +562,7 @@ impl KnowledgeGraph {
     }
 
     /// Find entities related to a domain concept
-    /// 
+    ///
     /// Note: This method is part of the public API for domain modeling and may be used
     /// by external clients or future functionality.
     #[allow(dead_code)]
@@ -578,7 +578,7 @@ impl KnowledgeGraph {
     }
 
     /// Find domain concepts for a code entity
-    /// 
+    ///
     /// Note: This method is part of the public API for domain modeling and may be used
     /// by external clients or future functionality.
     #[allow(dead_code)]
@@ -611,10 +611,10 @@ impl KnowledgeGraph {
     }
 
     /// Calculate impact of a change to an entity
-    /// 
+    ///
     /// This method analyzes the impact of changes to an entity by traversing relationships
     /// and calculating impact scores based on relationship types and weights.
-    /// 
+    ///
     /// Note: This method is part of the public API for impact analysis and may be used
     /// by external clients or future functionality.
     #[allow(dead_code)]

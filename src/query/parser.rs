@@ -148,12 +148,10 @@ pub fn parse_query(input: &str) -> Result<QueryType> {
             match inner_rule.as_rule() {
                 Rule::select_query => parse_select_query(inner_rule),
                 Rule::traversal_query => parse_traversal_query(inner_rule),
-                _ => {
-                    Err(anyhow!(
-                        "Expected select or traversal query, got {:?}",
-                        inner_rule.as_rule()
-                    ))
-                }
+                _ => Err(anyhow!(
+                    "Expected select or traversal query, got {:?}",
+                    inner_rule.as_rule()
+                )),
             }
         }
         Err(err) => Err(anyhow!("Syntax error: {}", err)),
@@ -325,9 +323,7 @@ fn parse_condition(pair: Pair<Rule>) -> Result<ConditionNode> {
                 Rule::has_keyword => {
                     if let Some(attr_pair) = inner_pairs.next() {
                         if attr_pair.as_rule() == Rule::attribute {
-                            return Ok(ConditionNode::HasAttribute(
-                                attr_pair.as_str().to_string(),
-                            ));
+                            return Ok(ConditionNode::HasAttribute(attr_pair.as_str().to_string()));
                         }
                     }
                     return Err(anyhow!("Expected attribute after 'has'"));

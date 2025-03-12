@@ -87,7 +87,10 @@ impl DomainModelBuilder for LlmModelExtractor {
         file_path: &'a str,
     ) -> Result<Vec<DomainEntity>> {
         // Check if api key is set (for providers that need it)
-        let needs_api_key = !matches!(self.config.provider, LlmProvider::Ollama | LlmProvider::Mock);
+        let needs_api_key = !matches!(
+            self.config.provider,
+            LlmProvider::Ollama | LlmProvider::Mock
+        );
 
         if needs_api_key && self.config.api_key.is_empty() {
             tracing::info!(
@@ -196,10 +199,7 @@ fn create_mock_entity(file_path: &str) -> Result<Vec<DomainEntity>> {
 
     // Return a more detailed mock entity based on the file name
     Ok(vec![DomainEntity {
-        name: format!(
-            "{}Model",
-            file_name.split('.').next().unwrap_or("Domain")
-        ),
+        name: format!("{}Model", file_name.split('.').next().unwrap_or("Domain")),
         entity_type,
         attributes: [
             ("id".to_string(), AttributeType::String),

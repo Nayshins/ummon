@@ -31,7 +31,6 @@ impl RustParser {
             self.traverse_node(child, f);
         }
     }
-    
 
     fn extract_visibility(&self, node: Node) -> Visibility {
         let mut cursor = node.walk();

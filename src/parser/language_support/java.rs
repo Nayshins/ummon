@@ -437,7 +437,6 @@ impl LanguageParser for JavaParser {
                             }
                         }
 
-
                         calls.push(CallReference {
                             callee_name: name.to_string(),
                             fully_qualified_name,

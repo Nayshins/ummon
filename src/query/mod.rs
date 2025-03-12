@@ -12,8 +12,8 @@ pub use parser::parse_query;
 #[cfg(test)]
 pub use parser::QueryType;
 
-use anyhow::Result;
 use crate::{graph::knowledge_graph::KnowledgeGraph, prompt::llm_integration::get_llm_config};
+use anyhow::Result;
 
 /// Process a query string and return formatted results
 pub async fn process_query(

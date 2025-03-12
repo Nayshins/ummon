@@ -95,10 +95,7 @@ where
             .write_all(b"\n")
             .await
             .map_err(TransportError::IoError)?;
-        writer
-            .flush()
-            .await
-            .map_err(TransportError::IoError)?;
+        writer.flush().await.map_err(TransportError::IoError)?;
 
         Ok(())
     }
