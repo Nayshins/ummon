@@ -53,14 +53,12 @@ pub trait DomainModelBuilder {
 pub struct LlmDomainModelBuilder {}
 
 impl DomainModelBuilder for LlmDomainModelBuilder {
-    fn extract_domain_model<'a>(
+    async fn extract_domain_model<'a>(
         &'a self,
         _content: &'a str,
         _file_path: &'a str,
-    ) -> impl std::future::Future<Output = Result<Vec<DomainEntity>>> + Send + 'a {
-        async move {
-            // This is just a placeholder implementation
-            Ok(Vec::new())
-        }
+    ) -> Result<Vec<DomainEntity>> {
+        // This is just a placeholder implementation
+        Ok(Vec::new())
     }
 }

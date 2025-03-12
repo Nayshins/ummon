@@ -7,6 +7,12 @@ pub struct RustParser {
     parser: Parser,
 }
 
+impl Default for RustParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RustParser {
     pub fn new() -> Self {
         let mut parser = Parser::new();
@@ -14,6 +20,7 @@ impl RustParser {
         Self { parser }
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn traverse_node<F>(&self, node: Node, f: &mut F)
     where
         F: FnMut(Node),
@@ -23,29 +30,6 @@ impl RustParser {
         for child in node.children(&mut cursor) {
             self.traverse_node(child, f);
         }
-    }
-
-    #[allow(dead_code)]
-    fn parse_functions(
-        &mut self,
-        content: &str,
-        file_path: &str,
-    ) -> Result<Vec<FunctionDefinition>> {
-        let tree = self
-            .parser
-            .parse(content, None)
-            .ok_or_else(|| anyhow::anyhow!("Failed to parse Rust code"))?;
-
-        let mut functions = Vec::new();
-        let root_node = tree.root_node();
-
-        self.traverse_node(root_node, &mut |node| {
-            if let Some(func) = self.extract_function_details(node, content, file_path) {
-                functions.push(func);
-            }
-        });
-
-        Ok(functions)
     }
 
     fn extract_visibility(&self, node: Node) -> Visibility {
@@ -190,6 +174,7 @@ impl RustParser {
         }
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn extract_path_expr(&self, node: Node, content: &str) -> Option<String> {
         if node.kind() == "identifier" {
             return Some(node.utf8_text(content.as_bytes()).ok()?.to_string());
@@ -256,21 +241,8 @@ impl LanguageParser for RustParser {
                 if let Some(function) = node.child_by_field_name("function") {
                     if let Some(path) = self.extract_path_expr(function, content) {
                         calls.push(CallReference {
-                            caller_location: Location {
-                                start: Position {
-                                    line: node.start_position().row,
-                                    column: node.start_position().column,
-                                    offset: node.start_byte(),
-                                },
-                                end: Position {
-                                    line: node.end_position().row,
-                                    column: node.end_position().column,
-                                    offset: node.end_byte(),
-                                },
-                            },
                             callee_name: path.split("::").last().unwrap_or(&path).to_string(),
                             fully_qualified_name: Some(path),
-                            arguments: Vec::new(),
                         });
                     }
                 }
@@ -279,21 +251,8 @@ impl LanguageParser for RustParser {
                 if let Some(name_node) = node.child_by_field_name("name") {
                     if let Ok(method_name) = name_node.utf8_text(content.as_bytes()) {
                         calls.push(CallReference {
-                            caller_location: Location {
-                                start: Position {
-                                    line: node.start_position().row,
-                                    column: node.start_position().column,
-                                    offset: node.start_byte(),
-                                },
-                                end: Position {
-                                    line: node.end_position().row,
-                                    column: node.end_position().column,
-                                    offset: node.end_byte(),
-                                },
-                            },
                             callee_name: method_name.to_string(),
                             fully_qualified_name: None,
-                            arguments: Vec::new(),
                         });
                     }
                 }

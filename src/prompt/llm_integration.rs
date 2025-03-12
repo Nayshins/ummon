@@ -295,24 +295,24 @@ fn get_request_headers(config: &LlmConfig) -> Vec<(&'static str, String)> {
 fn parse_response(json: Value, provider: LlmProvider) -> Result<String> {
     match provider {
         LlmProvider::OpenRouter | LlmProvider::OpenAI => {
-            if let Some(choice) = json["choices"].as_array().and_then(|arr| arr.get(0)) {
+            if let Some(choice) = json["choices"].as_array().and_then(|arr| arr.first()) {
                 if let Some(msg) = choice["message"]["content"].as_str() {
                     return Ok(msg.to_string());
                 }
             }
         }
         LlmProvider::Anthropic => {
-            if let Some(content) = json["content"].as_array().and_then(|arr| arr.get(0)) {
+            if let Some(content) = json["content"].as_array().and_then(|arr| arr.first()) {
                 if let Some(text) = content["text"].as_str() {
                     return Ok(text.to_string());
                 }
             }
         }
         LlmProvider::GoogleVertexAI => {
-            if let Some(predictions) = json["predictions"].as_array().and_then(|arr| arr.get(0)) {
+            if let Some(predictions) = json["predictions"].as_array().and_then(|arr| arr.first()) {
                 if let Some(text) = predictions["candidates"]
                     .as_array()
-                    .and_then(|arr| arr.get(0))
+                    .and_then(|arr| arr.first())
                     .and_then(|candidate| candidate["content"].as_str())
                 {
                     return Ok(text.to_string());

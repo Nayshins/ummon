@@ -23,20 +23,15 @@ pub struct Location {
 }
 
 /// Visibility level for code entities
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum Visibility {
     Public,
     Private,
     Protected,
     Package,
     Internal,
+    #[default]
     Default,
-}
-
-impl std::default::Default for Visibility {
-    fn default() -> Self {
-        Visibility::Default
-    }
 }
 
 /// Parameter in a function or method
@@ -117,22 +112,24 @@ pub trait Entity {
     fn id(&self) -> &EntityId;
     fn name(&self) -> &str;
     fn entity_type(&self) -> EntityType;
-    #[allow(dead_code)]
     fn location(&self) -> Option<&Location>;
     fn file_path(&self) -> Option<&String>;
-    #[allow(dead_code)]
     fn metadata(&self) -> &HashMap<String, String>;
 
     // Helper methods for MCP server
     fn path(&self) -> Option<&str> {
         self.file_path().map(|s| s.as_str())
     }
+    /// Get mutable access to entity metadata
+    /// Note: This method is required for the Entity trait but not currently used.
     #[allow(dead_code)]
     fn metadata_mut(&mut self) -> &mut HashMap<String, String>;
 
     /// Serialize the entity data to a string for database storage
     /// Default implementation provides empty JSON object
-    #[allow(dead_code)]
+    ///
+    /// Note: This method is used by the Database::save_entity method which is currently not in use.
+    /// It is preserved for future functionality.
     fn serialize_data(&self) -> anyhow::Result<String> {
         Ok("{}".to_string())
     }
@@ -527,10 +524,6 @@ impl Entity for DomainConceptEntity {
         serde_json::to_string(&data).map_err(Into::into)
     }
 }
-
-/// A boxed entity type for storing heterogeneous entities
-#[allow(dead_code)]
-pub type BoxedEntity = Box<dyn Entity + Send + Sync>;
 
 #[cfg(test)]
 mod tests {

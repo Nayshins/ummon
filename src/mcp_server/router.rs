@@ -361,9 +361,7 @@ impl UmmonRouter {
                     .unwrap_or_else(|| &target_id_str);
 
                 // Store the relationship
-                let entry = relationship_map
-                    .entry(current_id.clone())
-                    .or_insert_with(Vec::new);
+                let entry = relationship_map.entry(current_id.clone()).or_default();
                 entry.push((
                     rel.relationship_type.to_string(),
                     other_id.clone(),
@@ -390,7 +388,7 @@ impl UmmonRouter {
             id: &str,
             rel_map: &HashMap<String, Vec<(String, String, String)>>,
             depth: usize,
-            entity_names: &HashMap<String, String>,
+            _entity_names: &HashMap<String, String>,
             visited: &mut HashSet<String>,
         ) -> String {
             if visited.contains(id) || depth == 0 {
@@ -414,7 +412,7 @@ impl UmmonRouter {
                         other_id,
                         rel_map,
                         depth + 1,
-                        entity_names,
+                        _entity_names,
                         visited,
                     ));
                 }
@@ -502,7 +500,7 @@ impl UmmonRouter {
             // Collect module and file entities for structure analysis
             if matches!(entity.entity_type(), EntityType::Module | EntityType::File) {
                 // Use to_owned to get owned entity instead of clone on reference
-                if let Some(owned_entity) = self.knowledge_graph.get_entity(&entity.id()) {
+                if let Some(owned_entity) = self.knowledge_graph.get_entity(entity.id()) {
                     module_entities.push(owned_entity);
                 }
             }
@@ -531,10 +529,7 @@ impl UmmonRouter {
                     let parent = parts[parts.len() - 2].to_string();
                     let child = parts[parts.len() - 1].to_string();
 
-                    module_structure
-                        .entry(parent)
-                        .or_insert_with(Vec::new)
-                        .push(child);
+                    module_structure.entry(parent).or_default().push(child);
                 }
             }
         }
@@ -788,10 +783,7 @@ impl UmmonRouter {
                 result.push_str("### Component Relationships\n\n");
 
                 // Get entities that match the focus area
-                let search_results = match self.knowledge_graph.search(focus) {
-                    Ok(results) => results,
-                    Err(_) => Vec::new(),
-                };
+                let search_results = self.knowledge_graph.search(focus).unwrap_or_default();
 
                 // Analyze relationships between these entities
                 if !search_results.is_empty() {
@@ -881,9 +873,9 @@ impl UmmonRouter {
                 let l3 = parts[2].to_string();
                 let l4 = parts[3].to_string();
 
-                let level1 = tree.entry(l1).or_insert_with(HashMap::new);
-                let level2 = level1.entry(l2).or_insert_with(HashMap::new);
-                let level3 = level2.entry(l3).or_insert_with(Vec::new);
+                let level1 = tree.entry(l1).or_default();
+                let level2 = level1.entry(l2).or_default();
+                let level3 = level2.entry(l3).or_default();
 
                 if !level3.contains(&l4) {
                     level3.push(l4);
@@ -909,7 +901,7 @@ impl UmmonRouter {
                     result.push_str(&format!("    - {}/\n", l3_name));
 
                     // Show up to 5 files per module
-                    for (_idx, file) in l3_files.iter().take(5).enumerate() {
+                    for file in l3_files.iter().take(5) {
                         result.push_str(&format!("      - {}\n", file));
                     }
 
@@ -937,7 +929,7 @@ impl UmmonRouter {
         }
 
         // Find centrality - which entities have the most relationships
-        if !focus_area.is_some() {
+        if focus_area.is_none() {
             // Only do this for whole-codebase analysis
             result.push_str("\n### Central Components\n\n");
 

@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::f64;
 
 use crate::graph::{
     entity::{Entity, EntityType},
@@ -182,14 +183,14 @@ impl<'a> QueryExecutor<'a> {
             // Numeric comparisons
             (Operator::Equal, Value::Number(n)) => {
                 if let Ok(attr_num) = attr_value.parse::<f64>() {
-                    (attr_num - n).abs() < std::f64::EPSILON
+                    (attr_num - n).abs() < f64::EPSILON
                 } else {
                     false
                 }
             }
             (Operator::NotEqual, Value::Number(n)) => {
                 if let Ok(attr_num) = attr_value.parse::<f64>() {
-                    (attr_num - n).abs() > std::f64::EPSILON
+                    (attr_num - n).abs() > f64::EPSILON
                 } else {
                     true // If we can't parse as a number, they're not equal
                 }

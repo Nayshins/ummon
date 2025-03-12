@@ -7,6 +7,12 @@ pub struct JavaScriptParser {
     parser: Parser,
 }
 
+impl Default for JavaScriptParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl JavaScriptParser {
     pub fn new() -> Self {
         let mut parser = Parser::new();
@@ -218,6 +224,7 @@ impl JavaScriptParser {
         }
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn traverse_node<F>(&self, node: Node, f: &mut F)
     where
         F: FnMut(Node),
@@ -275,21 +282,8 @@ impl LanguageParser for JavaScriptParser {
                 if let Some(function) = node.child_by_field_name("function") {
                     if let Some((name, full_path)) = self.extract_call_name(function, content) {
                         calls.push(CallReference {
-                            caller_location: Location {
-                                start: Position {
-                                    line: node.start_position().row,
-                                    column: node.start_position().column,
-                                    offset: node.start_byte(),
-                                },
-                                end: Position {
-                                    line: node.end_position().row,
-                                    column: node.end_position().column,
-                                    offset: node.end_byte(),
-                                },
-                            },
                             callee_name: name,
                             fully_qualified_name: full_path,
-                            arguments: Vec::new(),
                         });
                     }
                 }

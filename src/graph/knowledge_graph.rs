@@ -8,30 +8,6 @@ use super::entity::{
 };
 use super::relationship::{Relationship, RelationshipStore, RelationshipType};
 
-/// A trait for database connection implementations.
-/// Provides methods for saving and loading entities and relationships.
-#[allow(dead_code)]
-pub trait DatabaseConnection {
-    /// Save a single entity to the database
-    fn save_entity(&self, entity: &dyn Entity) -> Result<()>;
-
-    /// Save a single relationship to the database
-    fn save_relationship(&self, relationship: &Relationship) -> Result<()>;
-
-    /// Load all entities from the database
-    fn load_entities(&self) -> Result<Vec<Box<dyn Entity>>>;
-
-    /// Load all relationships from the database
-    fn load_relationships(&self) -> Result<Vec<Relationship>>;
-
-    /// Save multiple entities and relationships in a single transaction
-    fn save_all_in_transaction(
-        &self,
-        entities: &[&dyn Entity],
-        relationships: &[&Relationship],
-    ) -> Result<()>;
-}
-
 /// Enhanced knowledge graph that stores entities and relationships
 #[derive(Debug, Serialize, Deserialize)]
 pub struct KnowledgeGraph {
@@ -90,6 +66,12 @@ fn downcast_entity<T: 'static + Clone>(entity: impl Entity + 'static) -> Option<
     match boxed_any.downcast::<T>() {
         Ok(boxed) => Some(*boxed),
         Err(_) => None,
+    }
+}
+
+impl Default for KnowledgeGraph {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -484,27 +466,6 @@ impl KnowledgeGraph {
             .collect()
     }
 
-    /// Get related entities (incoming)
-    #[allow(dead_code)]
-    pub fn get_dependent_entities(
-        &self,
-        target_id: &EntityId,
-        rel_type: Option<&RelationshipType>,
-    ) -> Vec<&dyn Entity> {
-        let relationships = self
-            .relationship_store
-            .get_incoming_relationships(target_id);
-
-        relationships
-            .into_iter()
-            .filter(|rel| match rel_type {
-                Some(rt) => &rel.relationship_type == rt,
-                None => true,
-            })
-            .filter_map(|rel| self.get_entity(&rel.source_id))
-            .collect()
-    }
-
     /// Find paths between entities using an iterative approach to avoid stack overflow
     pub fn find_paths(
         &self,
@@ -601,9 +562,11 @@ impl KnowledgeGraph {
     }
 
     /// Find entities related to a domain concept
+    ///
+    /// Note: This method is part of the public API for domain modeling and may be used
+    /// by external clients or future functionality.
     #[allow(dead_code)]
     pub fn get_entities_for_domain_concept(&self, concept_name: &str) -> Vec<&dyn Entity> {
-        // Find domain concept entities by name
         let domain_concepts = self.get_domain_concepts();
         let concept = domain_concepts.iter().find(|c| c.name() == concept_name);
 
@@ -613,14 +576,24 @@ impl KnowledgeGraph {
             Vec::new()
         }
     }
+
     /// Find domain concepts for a code entity
+    ///
+    /// Note: This method is part of the public API for domain modeling and may be used
+    /// by external clients or future functionality.
     #[allow(dead_code)]
     pub fn get_domain_concepts_for_entity(
         &self,
         entity_id: &EntityId,
     ) -> Vec<&DomainConceptEntity> {
-        self.get_dependent_entities(entity_id, Some(&RelationshipType::RepresentedBy))
+        let relationships = self
+            .relationship_store
+            .get_incoming_relationships(entity_id);
+
+        relationships
             .into_iter()
+            .filter(|rel| rel.relationship_type == RelationshipType::RepresentedBy)
+            .filter_map(|rel| self.get_entity(&rel.source_id))
             .filter_map(|e| {
                 if let EntityType::DomainConcept = e.entity_type() {
                     if let Some(EntityStorage::DomainConcept(domain_concept)) =
@@ -638,6 +611,12 @@ impl KnowledgeGraph {
     }
 
     /// Calculate impact of a change to an entity
+    ///
+    /// This method analyzes the impact of changes to an entity by traversing relationships
+    /// and calculating impact scores based on relationship types and weights.
+    ///
+    /// Note: This method is part of the public API for impact analysis and may be used
+    /// by external clients or future functionality.
     #[allow(dead_code)]
     pub fn calculate_impact(
         &self,
@@ -645,10 +624,8 @@ impl KnowledgeGraph {
         max_depth: usize,
     ) -> HashMap<EntityId, f32> {
         let mut impact = HashMap::new();
-        let mut queue = Vec::new();
-
         // Start with the entity itself
-        queue.push((entity_id.clone(), 1.0f32));
+        let mut queue = vec![(entity_id.clone(), 1.0f32)];
 
         for _ in 0..max_depth {
             if queue.is_empty() {
@@ -702,7 +679,6 @@ impl KnowledgeGraph {
     }
 
     // File operations
-    #[allow(dead_code)]
     // NOTE: File-based persistence methods (save/load) have been removed.
     // The KnowledgeGraph is now created and maintained via other interfaces.
 

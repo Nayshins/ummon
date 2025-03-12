@@ -490,7 +490,7 @@ async fn infer_domain_model(
         tracing::info!("Analyzing directory for domain extraction: {}", domain_dir);
 
         // Process code in the specified directory, respecting .gitignore
-        let walker = WalkBuilder::new(&domain_dir)
+        let walker = WalkBuilder::new(domain_dir)
             .hidden(false)
             .ignore(true) // Respect .gitignore files
             .git_global(true) // Use global git ignore files
@@ -589,7 +589,7 @@ async fn infer_domain_model(
                 );
 
                 // Convert attributes to strings
-                let attributes: Vec<String> = entity.attributes.keys().map(|k| k.clone()).collect();
+                let attributes: Vec<String> = entity.attributes.keys().cloned().collect();
 
                 // Create domain concept entity
                 let domain_concept = DomainConceptEntity {
@@ -647,8 +647,7 @@ async fn infer_domain_model(
             let tech_entities1 =
                 kg.get_related_entities(&entity1_id, Some(&RelationshipType::RepresentedBy));
 
-            for j in (i + 1)..domain_entities.len() {
-                let entity2 = domain_entities[j];
+            for entity2 in domain_entities.iter().skip(i + 1) {
                 let entity2_id = entity2.id().clone();
 
                 // Find technical entities related to the second domain concept
@@ -662,7 +661,7 @@ async fn infer_domain_model(
                 for tech1 in &tech_entities1 {
                     for tech2 in &tech_entities2 {
                         // Check if there's any relationship between these technical entities
-                        if kg.find_paths(tech1.id(), tech2.id(), 3).len() > 0 {
+                        if !kg.find_paths(tech1.id(), tech2.id(), 3).is_empty() {
                             has_relationship = true;
                             break;
                         }

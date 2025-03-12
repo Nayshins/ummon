@@ -10,10 +10,6 @@ pub enum ToolError {
 
     #[error("Execution failed: {0}")]
     ExecutionFailed(String),
-
-    #[error("Internal error: {0}")]
-    #[allow(dead_code)]
-    Internal(String),
 }
 
 #[derive(Debug, Error)]
@@ -24,11 +20,8 @@ pub enum ResourceError {
     #[error("Permission denied: {0}")]
     PermissionDenied(String),
 
-    #[error("Invalid resource: {0}")]
-    #[allow(dead_code)]
-    InvalidResource(String),
-
     #[error("Internal error: {0}")]
+    // Used in server.rs for error handling
     #[allow(dead_code)]
     Internal(String),
 }
@@ -43,10 +36,6 @@ pub enum TransportError {
 
     #[error("Invalid JSON-RPC: {0}")]
     InvalidJsonRpc(String),
-
-    #[error("Internal error: {0}")]
-    #[allow(dead_code)]
-    Internal(String),
 }
 
 #[derive(Debug, Error)]

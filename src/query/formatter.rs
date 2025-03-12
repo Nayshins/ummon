@@ -13,13 +13,15 @@ pub enum OutputFormat {
     Csv,
 }
 
-impl OutputFormat {
-    pub fn from_str(format: &str) -> Self {
-        match format.to_lowercase().as_str() {
-            "json" => OutputFormat::Json,
-            "tree" => OutputFormat::Tree,
-            "csv" => OutputFormat::Csv,
-            _ => OutputFormat::Text, // Default to text format
+impl std::str::FromStr for OutputFormat {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "json" => Ok(OutputFormat::Json),
+            "tree" => Ok(OutputFormat::Tree),
+            "csv" => Ok(OutputFormat::Csv),
+            _ => Ok(OutputFormat::Text), // Default to text format
         }
     }
 }
@@ -148,7 +150,7 @@ impl<'a> ResultFormatter<'a> {
         }
 
         // Collect all possible attributes
-        let all_attributes = vec!["id", "name", "type", "file_path"];
+        let all_attributes = ["id", "name", "type", "file_path"];
         let mut all_metadata_keys = HashSet::new();
 
         for entity in &entities {

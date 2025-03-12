@@ -39,3 +39,12 @@ Tests have been set up as inline modules within each source file using Rust's `#
 - **Formatting**: Follow Rust style guidelines with 4-space indentation
 - **Modules**: Organize code in modules by functionality (parser, graph, commands)
 - **Warnings**: Do not check in new warnings
+- **Dead Code**: Eliminate unused functions, variables, and imports. Dead code should only be retained when necessary for compilation purposes.
+
+## Comment Structure
+- **Public API**: Use triple-slash `///` doc comments for all public functions, structs, and methods
+- **Implementation**: Use double-slash `//` for inline comments explaining complex logic
+- **TODOs**: Format as `// TODO: description` with a clear action item
+- **Module Headers**: Add a brief description at the top of each file explaining its purpose
+- **Sections**: Use comment blocks `// ---- SECTION NAME ----` to separate logical sections within large files
+- **Reasoning**: Include rationale for non-obvious implementation choices

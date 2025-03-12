@@ -5,6 +5,12 @@ pub struct PythonParser {
     parser: Parser,
 }
 
+impl Default for PythonParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PythonParser {
     pub fn new() -> Self {
         let mut parser = Parser::new();
@@ -12,6 +18,7 @@ impl PythonParser {
         Self { parser }
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn traverse_node<F>(&self, node: Node, f: &mut F)
     where
         F: FnMut(Node),
@@ -281,21 +288,8 @@ impl LanguageParser for PythonParser {
                 if let Some(func) = node.child_by_field_name("function") {
                     if let Ok(name) = func.utf8_text(content.as_bytes()) {
                         calls.push(CallReference {
-                            caller_location: Location {
-                                start: Position {
-                                    line: node.start_position().row,
-                                    column: node.start_position().column,
-                                    offset: node.start_byte(),
-                                },
-                                end: Position {
-                                    line: node.end_position().row,
-                                    column: node.end_position().column,
-                                    offset: node.end_byte(),
-                                },
-                            },
                             callee_name: name.to_string(),
                             fully_qualified_name: None,
-                            arguments: Vec::new(),
                         });
                     }
                 }
