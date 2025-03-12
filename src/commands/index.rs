@@ -4,9 +4,10 @@ use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
 use crate::graph::entity::{
-    BaseEntity, EntityId, EntityType, FunctionEntity, ModuleEntity, TypeEntity, VariableEntity,
+    BaseEntity, Entity, EntityId, EntityType, FunctionEntity, ModuleEntity, TypeEntity,
+    VariableEntity,
 };
-use crate::graph::relationship::RelationshipType;
+use crate::graph::relationship::{Relationship, RelationshipType};
 use crate::graph::KnowledgeGraph;
 use crate::parser::domain_model::RelationType;
 use crate::parser::language_support::{
@@ -74,7 +75,18 @@ pub async fn run(
     .await?;
 
     let duration = start_time.elapsed();
-    kg.save_to_file("knowledge_graph.json")?;
+
+    // Save to SQLite database
+    tracing::info!("Saving knowledge graph to database...");
+    let db = crate::db::get_database("ummon.db")?;
+
+    // Prepare entities and relationships for saving
+    let entities: Vec<&dyn Entity> = kg.get_all_entities();
+    let relationships = kg.get_all_relationships()?;
+    let rel_refs: Vec<&Relationship> = relationships.iter().collect();
+
+    // Save all data in one transaction
+    db.save_all_in_transaction(&entities, &rel_refs)?;
 
     // Print indexing statistics
     let entity_count = kg.get_all_entities().len();
@@ -86,7 +98,7 @@ pub async fn run(
     tracing::info!("  - {} entities indexed", entity_count);
     tracing::info!("  - {} relationships established", relationship_count);
     tracing::info!("  - {} domain concepts inferred", domain_concept_count);
-    tracing::info!("Graph saved to knowledge_graph.json.");
+    tracing::info!("Graph saved to database 'ummon.db'.");
 
     Ok(())
 }

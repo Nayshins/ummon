@@ -3,17 +3,22 @@ use std::collections::HashMap;
 use std::hash::Hash;
 
 /// Position in a source file
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct Position {
+    #[serde(default)]
     pub line: usize,
+    #[serde(default)]
     pub column: usize,
+    #[serde(default)]
     pub offset: usize,
 }
 
 /// Location range in a source file
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct Location {
+    #[serde(default)]
     pub start: Position,
+    #[serde(default)]
     pub end: Position,
 }
 
@@ -28,11 +33,20 @@ pub enum Visibility {
     Default,
 }
 
+impl std::default::Default for Visibility {
+    fn default() -> Self {
+        Visibility::Default
+    }
+}
+
 /// Parameter in a function or method
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct Parameter {
+    #[serde(default)]
     pub name: String,
+    #[serde(default)]
     pub type_annotation: Option<String>,
+    #[serde(default)]
     pub default_value: Option<String>,
 }
 
@@ -201,14 +215,21 @@ pub struct FunctionEntity {
 }
 
 /// Serializable data for function entities
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct FunctionEntityData {
+    #[serde(default)]
     pub parameters: Vec<Parameter>,
+    #[serde(default)]
     pub return_type: Option<String>,
+    #[serde(default)]
     pub visibility: Visibility,
+    #[serde(default)]
     pub is_async: bool,
+    #[serde(default)]
     pub is_static: bool,
+    #[serde(default)]
     pub is_constructor: bool,
+    #[serde(default)]
     pub is_abstract: bool,
 }
 
@@ -267,12 +288,17 @@ pub struct TypeEntity {
 }
 
 /// Serializable data for type entities
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct TypeEntityData {
+    #[serde(default)]
     pub fields: Vec<EntityId>,
+    #[serde(default)]
     pub methods: Vec<EntityId>,
+    #[serde(default)]
     pub supertypes: Vec<EntityId>,
+    #[serde(default)]
     pub visibility: Visibility,
+    #[serde(default)]
     pub is_abstract: bool,
 }
 
@@ -327,10 +353,13 @@ pub struct ModuleEntity {
 }
 
 /// Serializable data for module entities
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct ModuleEntityData {
+    #[serde(default)]
     pub path: String,
+    #[serde(default)]
     pub children: Vec<EntityId>,
+    #[serde(default)]
     pub imports: Vec<String>,
 }
 
@@ -384,11 +413,15 @@ pub struct VariableEntity {
 }
 
 /// Serializable data for variable entities
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct VariableEntityData {
+    #[serde(default)]
     pub type_annotation: Option<String>,
+    #[serde(default)]
     pub visibility: Visibility,
+    #[serde(default)]
     pub is_const: bool,
+    #[serde(default)]
     pub is_static: bool,
 }
 
@@ -442,11 +475,18 @@ pub struct DomainConceptEntity {
 }
 
 /// Serializable data for domain concept entities
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct DomainConceptEntityData {
+    #[serde(default)]
     pub attributes: Vec<String>,
+    #[serde(default)]
     pub description: Option<String>,
+    #[serde(default = "default_confidence")]
     pub confidence: f32,
+}
+
+fn default_confidence() -> f32 {
+    0.5
 }
 
 impl Entity for DomainConceptEntity {

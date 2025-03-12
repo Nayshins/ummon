@@ -11,34 +11,73 @@ use crate::mcp_server::{ByteTransport, Server, UmmonRouter};
 pub async fn run() -> Result<()> {
     info!("Starting Ummon MCP server");
 
-    // Try to load the knowledge graph
-    let knowledge_graph = match KnowledgeGraph::load() {
-        Ok(kg) => {
-            // Verify that there's something in the knowledge graph
-            let entity_count = kg.get_all_entities().len();
-            if entity_count == 0 {
-                error!("Knowledge graph was loaded but contains 0 entities");
-                error!("Please run `ummon index <directory>` to populate the knowledge graph");
-                return Err(anyhow::anyhow!(
-                    "Empty knowledge graph, please run `ummon index <directory>` to populate it"
-                ));
-            }
-
-            info!(
-                "Successfully loaded knowledge graph with {} entities and {} relationships",
-                entity_count,
-                kg.get_relationship_count()
-            );
-            kg
+    // Try to load the knowledge graph from the database
+    let db = match crate::db::get_database("ummon.db") {
+        Ok(db) => {
+            info!("Connected to knowledge graph database");
+            db
         }
         Err(e) => {
-            error!("Failed to load knowledge graph: {}", e);
+            error!("Failed to connect to database: {}", e);
             error!("Please run `ummon index <directory>` first to create a knowledge graph");
             return Err(anyhow::anyhow!(
-                "Knowledge graph not found, please run `ummon index <directory>` first"
+                "Database connection failed, please run `ummon index <directory>` first"
             ));
         }
     };
+
+    // Create a new knowledge graph and load entities and relationships
+    let mut knowledge_graph = KnowledgeGraph::new();
+
+    // Load entities from database
+    match db.load_entities() {
+        Ok(entities) => {
+            for entity in entities {
+                if let Err(e) = knowledge_graph.add_boxed_entity(entity) {
+                    error!("Failed to add entity to knowledge graph: {}", e);
+                }
+            }
+        }
+        Err(e) => {
+            error!("Failed to load entities from database: {}", e);
+            return Err(anyhow::anyhow!(
+                "Failed to load entities from database: {}",
+                e
+            ));
+        }
+    }
+
+    // Load relationships from database
+    match db.load_relationships() {
+        Ok(relationships) => {
+            for relationship in relationships {
+                knowledge_graph.add_relationship(relationship);
+            }
+        }
+        Err(e) => {
+            error!("Failed to load relationships from database: {}", e);
+            return Err(anyhow::anyhow!(
+                "Failed to load relationships from database: {}",
+                e
+            ));
+        }
+    }
+
+    // Verify that there's something in the knowledge graph
+    let entity_count = knowledge_graph.get_all_entities().len();
+    if entity_count == 0 {
+        error!("Knowledge graph was loaded but contains 0 entities");
+        error!("Please run `ummon index <directory>` to populate the knowledge graph");
+        return Err(anyhow::anyhow!(
+            "Empty knowledge graph, please run `ummon index <directory>` to populate it"
+        ));
+    }
+
+    info!(
+        "Successfully loaded knowledge graph with {} entities and {} relationships",
+        entity_count,
+        knowledge_graph.get_relationship_count()
+    );
 
     let knowledge_graph = Arc::new(knowledge_graph);
     let router = UmmonRouter::new(knowledge_graph);
