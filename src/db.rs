@@ -17,9 +17,9 @@ use crate::graph::relationship::{Relationship, RelationshipType};
 #[allow(dead_code)]
 const CURRENT_SCHEMA_VERSION: i32 = 1;
 
-/// For testing - ensures the module is included
-pub fn for_test() -> bool {
-    true
+/// Get a database instance - this is a convenience method that just calls Database::new
+pub fn get_database(path: &str) -> Result<Database> {
+    Database::new(path)
 }
 
 /// Database wrapper for managing the SQLite knowledge graph storage with connection pooling
@@ -95,11 +95,6 @@ impl Database {
         Ok(db)
     }
 
-    /// Create a new Database from a path string (convenience method for use across crate boundaries)
-    pub fn from_path(path: &str) -> Result<Self> {
-        Self::new(path)
-    }
-
     /// Get a connection from the pool
     pub fn get_connection(&self) -> Result<r2d2::PooledConnection<SqliteConnectionManager>> {
         self.pool.get().map_err(|e| {
@@ -114,73 +109,49 @@ impl Database {
     /// Initialize the database schema if needed, using a single transaction
     fn initialize_schema(&self) -> Result<()> {
         debug!("Initializing database schema for {}", self.db_path);
-        let mut conn = self.get_connection()?;
-        let tx = conn.transaction()?;
+        let conn = self.get_connection()?;
 
-        // Create schema_version table if it doesn't exist
-        tx.execute(
+        // Simple schema creation - all statements use IF NOT EXISTS
+        conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS schema_version (
                 version INTEGER PRIMARY KEY
-            )",
-            [],
+            );
+            
+            CREATE TABLE IF NOT EXISTS entities (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                entity_type TEXT NOT NULL,
+                file_path TEXT,
+                location TEXT,
+                documentation TEXT,
+                containing_entity TEXT,
+                data TEXT NOT NULL
+            );
+            
+            CREATE TABLE IF NOT EXISTS relationships (
+                id TEXT PRIMARY KEY,
+                source_id TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                relationship_type TEXT NOT NULL,
+                weight REAL NOT NULL DEFAULT 1.0,
+                metadata TEXT,
+                FOREIGN KEY(source_id) REFERENCES entities(id),
+                FOREIGN KEY(target_id) REFERENCES entities(id)
+            );
+            
+            CREATE INDEX IF NOT EXISTS idx_entity_name ON entities(name);
+            CREATE INDEX IF NOT EXISTS idx_entity_type ON entities(entity_type);
+            CREATE INDEX IF NOT EXISTS idx_entity_file_path ON entities(file_path);
+            
+            CREATE INDEX IF NOT EXISTS idx_rel_source ON relationships(source_id);
+            CREATE INDEX IF NOT EXISTS idx_rel_target ON relationships(target_id);
+            CREATE INDEX IF NOT EXISTS idx_rel_type ON relationships(relationship_type);
+            
+            -- Initialize version if needed (using OR IGNORE to avoid errors if already exists)
+            INSERT OR IGNORE INTO schema_version (version) VALUES (1);",
         )?;
 
-        // Initialize version if needed
-        tx.execute(
-            "INSERT OR IGNORE INTO schema_version (version) VALUES (0)",
-            [],
-        )?;
-
-        // Check current schema version
-        let version: i32 =
-            tx.query_row("SELECT version FROM schema_version", [], |row| row.get(0))?;
-
-        // Apply migrations if needed
-        if version < 1 {
-            debug!("Applying schema migration to version 1");
-            // Initial schema creation
-            tx.execute_batch(
-                "CREATE TABLE entities (
-                    id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    entity_type TEXT NOT NULL,
-                    file_path TEXT,
-                    location TEXT,
-                    documentation TEXT,
-                    containing_entity TEXT,
-                    data TEXT NOT NULL
-                );
-                
-                CREATE TABLE relationships (
-                    id TEXT PRIMARY KEY,
-                    source_id TEXT NOT NULL,
-                    target_id TEXT NOT NULL,
-                    relationship_type TEXT NOT NULL,
-                    weight REAL NOT NULL DEFAULT 1.0,
-                    metadata TEXT,
-                    FOREIGN KEY(source_id) REFERENCES entities(id),
-                    FOREIGN KEY(target_id) REFERENCES entities(id)
-                );
-                
-                CREATE INDEX idx_entity_name ON entities(name);
-                CREATE INDEX idx_entity_type ON entities(entity_type);
-                CREATE INDEX idx_entity_file_path ON entities(file_path);
-                
-                CREATE INDEX idx_rel_source ON relationships(source_id);
-                CREATE INDEX idx_rel_target ON relationships(target_id);
-                CREATE INDEX idx_rel_type ON relationships(relationship_type);",
-            )?;
-
-            // Update schema version
-            tx.execute("UPDATE schema_version SET version = 1", [])?;
-            info!("Database schema updated to version 1");
-        }
-
-        // Add more version checks and migrations here for future schema changes
-        // if version < 2 { ... }
-
-        // Commit the transaction
-        tx.commit()?;
+        debug!("Database schema initialized successfully");
         Ok(())
     }
 
@@ -400,10 +371,21 @@ impl Database {
                         }),
                         Err(e) => {
                             error!(
-                                "Failed to parse FunctionEntityData for entity {}: {}",
+                                "Failed to parse FunctionEntityData for entity {}: {}, trying with default values",
                                 id, e
                             );
-                            Box::new(base)
+                            // Try to parse with relaxed settings or use default values
+                            let default_data = FunctionEntityData::default();
+                            Box::new(FunctionEntity {
+                                base,
+                                parameters: default_data.parameters,
+                                return_type: default_data.return_type,
+                                visibility: default_data.visibility,
+                                is_async: default_data.is_async,
+                                is_static: default_data.is_static,
+                                is_constructor: default_data.is_constructor,
+                                is_abstract: default_data.is_abstract,
+                            })
                         }
                     }
                 }
@@ -422,8 +404,17 @@ impl Database {
                         is_abstract: data.is_abstract,
                     }),
                     Err(e) => {
-                        error!("Failed to parse TypeEntityData for entity {}: {}", id, e);
-                        Box::new(base)
+                        error!("Failed to parse TypeEntityData for entity {}: {}, trying with default values", id, e);
+                        // Use default values
+                        let default_data = TypeEntityData::default();
+                        Box::new(TypeEntity {
+                            base,
+                            fields: default_data.fields,
+                            methods: default_data.methods,
+                            supertypes: default_data.supertypes,
+                            visibility: default_data.visibility,
+                            is_abstract: default_data.is_abstract,
+                        })
                     }
                 },
                 EntityType::Module | EntityType::File => {
@@ -435,8 +426,15 @@ impl Database {
                             imports: data.imports,
                         }),
                         Err(e) => {
-                            error!("Failed to parse ModuleEntityData for entity {}: {}", id, e);
-                            Box::new(base)
+                            error!("Failed to parse ModuleEntityData for entity {}: {}, trying with default values", id, e);
+                            // Use default values
+                            let default_data = ModuleEntityData::default();
+                            Box::new(ModuleEntity {
+                                base,
+                                path: default_data.path,
+                                children: default_data.children,
+                                imports: default_data.imports,
+                            })
                         }
                     }
                 }
@@ -451,10 +449,18 @@ impl Database {
                         }),
                         Err(e) => {
                             error!(
-                                "Failed to parse VariableEntityData for entity {}: {}",
+                                "Failed to parse VariableEntityData for entity {}: {}, trying with default values",
                                 id, e
                             );
-                            Box::new(base)
+                            // Use default values
+                            let default_data = VariableEntityData::default();
+                            Box::new(VariableEntity {
+                                base,
+                                type_annotation: default_data.type_annotation,
+                                visibility: default_data.visibility,
+                                is_const: default_data.is_const,
+                                is_static: default_data.is_static,
+                            })
                         }
                     }
                 }
@@ -468,10 +474,17 @@ impl Database {
                         }),
                         Err(e) => {
                             error!(
-                                "Failed to parse DomainConceptEntityData for entity {}: {}",
+                                "Failed to parse DomainConceptEntityData for entity {}: {}, trying with default values",
                                 id, e
                             );
-                            Box::new(base)
+                            // Use default values
+                            let default_data = DomainConceptEntityData::default();
+                            Box::new(DomainConceptEntity {
+                                base,
+                                attributes: default_data.attributes,
+                                description: default_data.description,
+                                confidence: default_data.confidence,
+                            })
                         }
                     }
                 }

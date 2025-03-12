@@ -1,5 +1,6 @@
 mod cli;
 mod commands;
+mod db;
 mod graph;
 mod mcp_core;
 mod mcp_server;

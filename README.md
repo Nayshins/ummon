@@ -94,8 +94,7 @@ ummon query "select functions where file_path like 'src/auth/%'" --no-llm
 ummon assist "implement a user registration function"
 
 # Start an MCP server (Model Context Protocol) for AI agent interaction
-ummon serve                      # Use stdin/stdout (default)
-ummon serve --transport http     # Use HTTP server (requires feature flag)
+ummon serve                      # MCP server uses stdin/stdout for communication
 ```
 
 ## MCP Server
@@ -106,10 +105,7 @@ Ummon includes a Model Context Protocol (MCP) server that allows AI agents to in
 
 - `search_code`: Search for code entities using a natural language query
 - `get_entity`: Get detailed information about a specific entity
-
-### Available Resources:
-
-- `knowledge_graph.json`: The full knowledge graph in JSON format
+- `debug_graph`: Get information about the knowledge graph structure
 
 ### Example MCP Usage:
 

@@ -103,6 +103,148 @@ impl KnowledgeGraph {
         }
     }
 
+    /// Add a boxed entity directly to the graph
+    pub fn add_boxed_entity(&mut self, entity: Box<dyn Entity>) -> Result<()> {
+        let id = entity.id().clone();
+        let entity_type = entity.entity_type();
+        let entity_name = entity.name().to_string();
+        let _entity_path = entity.path().map(|p| p.to_string());
+        let file_path = entity.file_path().map(|p| p.to_string());
+        let _metadata = entity.metadata().clone();
+
+        // Instead of trying to downcast the boxed entity directly, create a new entity of the appropriate type
+        let storage = match entity_type {
+            EntityType::Function | EntityType::Method => {
+                // Create a new FunctionEntity with the same data
+                let base = BaseEntity::new(id.clone(), entity_name, entity_type.clone(), file_path);
+
+                let function = FunctionEntity {
+                    base,
+                    parameters: vec![], // Default values, can be improved
+                    return_type: None,
+                    visibility: crate::graph::entity::Visibility::Public,
+                    is_async: false,
+                    is_static: false,
+                    is_constructor: false,
+                    is_abstract: false,
+                };
+
+                EntityStorage::Function(function)
+            }
+            EntityType::Class
+            | EntityType::Interface
+            | EntityType::Trait
+            | EntityType::Struct
+            | EntityType::Enum
+            | EntityType::Type => {
+                let base = BaseEntity::new(id.clone(), entity_name, entity_type.clone(), file_path);
+
+                let type_entity = TypeEntity {
+                    base,
+                    fields: vec![], // Default values
+                    methods: vec![],
+                    supertypes: vec![],
+                    visibility: crate::graph::entity::Visibility::Public,
+                    is_abstract: false,
+                };
+
+                EntityStorage::Type(type_entity)
+            }
+            EntityType::Module | EntityType::File => {
+                let base = BaseEntity::new(
+                    id.clone(),
+                    entity_name,
+                    entity_type.clone(),
+                    file_path.clone(),
+                );
+
+                let module = ModuleEntity {
+                    base,
+                    path: file_path.unwrap_or_default(),
+                    children: vec![],
+                    imports: vec![],
+                };
+
+                EntityStorage::Module(module)
+            }
+            EntityType::Variable | EntityType::Field | EntityType::Constant => {
+                let base = BaseEntity::new(id.clone(), entity_name, entity_type.clone(), file_path);
+
+                let variable = VariableEntity {
+                    base,
+                    type_annotation: None,
+                    visibility: crate::graph::entity::Visibility::Public,
+                    is_const: entity_type == EntityType::Constant,
+                    is_static: false,
+                };
+
+                EntityStorage::Variable(variable)
+            }
+            EntityType::DomainConcept => {
+                let base = BaseEntity::new(id.clone(), entity_name, entity_type.clone(), file_path);
+
+                let domain = DomainConceptEntity {
+                    base,
+                    attributes: vec![],
+                    description: None,
+                    confidence: 0.5,
+                };
+
+                EntityStorage::DomainConcept(domain)
+            }
+            _ => {
+                let base = BaseEntity::new(id.clone(), entity_name, entity_type.clone(), file_path);
+
+                EntityStorage::Base(base)
+            }
+        };
+
+        // Now proceed with indexing and insertion
+        let entity_name = entity.name().to_lowercase();
+        let entity_path = entity.path().map(|p| p.to_lowercase());
+        let entity_type_str = entity.entity_type().to_string().to_lowercase();
+
+        // Collect metadata values
+        let metadata_values: Vec<String> = entity
+            .metadata()
+            .iter()
+            .map(|(_key, v)| v.to_lowercase())
+            .collect();
+
+        // Now insert the entity
+        self.entities.insert(id.clone(), Box::new(storage));
+
+        // Index by name (lowercase for case-insensitive search)
+        self.search_index
+            .entry(entity_name)
+            .or_default()
+            .push(id.clone());
+
+        // Index by file path if available
+        if let Some(path_lower) = entity_path {
+            self.search_index
+                .entry(path_lower)
+                .or_default()
+                .push(id.clone());
+        }
+
+        // Index by entity type
+        self.search_index
+            .entry(entity_type_str)
+            .or_default()
+            .push(id.clone());
+
+        // Index by any metadata fields
+        for value_lower in metadata_values {
+            self.search_index
+                .entry(value_lower)
+                .or_default()
+                .push(id.clone());
+        }
+
+        Ok(())
+    }
+
     /// Add a general entity to the graph
     pub fn add_entity<E: Entity + 'static>(&mut self, entity: E) -> Result<()> {
         let id = entity.id().clone();
@@ -561,93 +703,8 @@ impl KnowledgeGraph {
 
     // File operations
     #[allow(dead_code)]
-    pub fn save(&self) -> Result<()> {
-        self.save_to_file("knowledge_graph.json")
-    }
-
-    pub fn load() -> Result<Self> {
-        Self::load_from_file("knowledge_graph.json")
-    }
-
-    pub fn save_to_file(&self, path: &str) -> Result<()> {
-        // Create a serializable version of the graph
-        // We derive relationship_data from relationship_store
-        // This ensures consistency between the two data structures
-
-        // Get all relationships from the store for serialization
-        let relationships = self.relationship_store.get_all_relationships();
-
-        let serialized = serde_json::json!({
-            "entities": self.entities,
-            "relationship_data": relationships,
-        });
-
-        let json = serde_json::to_string_pretty(&serialized)?;
-        std::fs::write(path, json)?;
-        Ok(())
-    }
-
-    pub fn load_from_file(path: &str) -> Result<Self> {
-        let content = std::fs::read_to_string(path)?;
-
-        // Parse the JSON manually to extract entities and relationships
-        let parsed: serde_json::Value = serde_json::from_str(&content)?;
-
-        // Create a new graph
-        let mut graph = KnowledgeGraph::new();
-
-        // Load entities
-        if let Some(entities_json) = parsed.get("entities") {
-            let entities: HashMap<EntityId, Box<EntityStorage>> =
-                serde_json::from_value(entities_json.clone())?;
-
-            graph.entities = entities;
-        }
-
-        // Load relationships
-        if let Some(rels_json) = parsed.get("relationship_data") {
-            let relationships: Vec<Relationship> = serde_json::from_value(rels_json.clone())?;
-
-            for rel in relationships {
-                graph.add_relationship(rel);
-            }
-        }
-
-        // Rebuild search index - we need to be careful with borrowing here
-        let mut search_index: HashMap<String, Vec<EntityId>> = HashMap::new();
-
-        for (id, entity_storage) in &graph.entities {
-            let entity = entity_storage.as_entity();
-
-            // Index by name
-            let name = entity.name().to_lowercase();
-            search_index.entry(name).or_default().push(id.clone());
-
-            // Index by file path if available
-            if let Some(path) = entity.path() {
-                let path_lower = path.to_lowercase();
-                search_index.entry(path_lower).or_default().push(id.clone());
-            }
-
-            // Index by entity type
-            let type_str = entity.entity_type().to_string().to_lowercase();
-            search_index.entry(type_str).or_default().push(id.clone());
-
-            // Index by any metadata fields
-            for (_, value) in entity.metadata().iter() {
-                let value_lower = value.to_lowercase();
-                search_index
-                    .entry(value_lower)
-                    .or_default()
-                    .push(id.clone());
-            }
-        }
-
-        // Now assign the rebuilt search index
-        graph.search_index = search_index;
-
-        Ok(graph)
-    }
+    // NOTE: File-based persistence methods (save/load) have been removed.
+    // The KnowledgeGraph is now created and maintained via other interfaces.
 
     // Search functionality for MCP server using the search index
     pub fn search(&self, query: &str) -> Result<Vec<&dyn Entity>> {
@@ -1603,81 +1660,7 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn test_serialization_deserialization() {
-        let mut kg = KnowledgeGraph::new();
-
-        // Add some entities and relationships
-        let id_a = EntityId::new("A");
-        let base_a = BaseEntity::new(
-            id_a.clone(),
-            "A".to_string(),
-            EntityType::Function,
-            Some("test.rs".to_string()),
-        );
-
-        let function_a = FunctionEntity {
-            base: base_a,
-            parameters: vec![],
-            return_type: None,
-            visibility: Visibility::Public,
-            is_async: false,
-            is_static: false,
-            is_constructor: false,
-            is_abstract: false,
-        };
-
-        let id_b = EntityId::new("B");
-        let base_b = BaseEntity::new(
-            id_b.clone(),
-            "B".to_string(),
-            EntityType::Function,
-            Some("test.rs".to_string()),
-        );
-
-        let function_b = FunctionEntity {
-            base: base_b,
-            parameters: vec![],
-            return_type: None,
-            visibility: Visibility::Public,
-            is_async: false,
-            is_static: false,
-            is_constructor: false,
-            is_abstract: false,
-        };
-
-        kg.add_entity(function_a).unwrap();
-        kg.add_entity(function_b).unwrap();
-        kg.create_relationship(id_a.clone(), id_b.clone(), RelationshipType::Calls)
-            .unwrap();
-
-        // Write to a temporary file
-        let temp_file = std::env::temp_dir().join("test_kg.json");
-        let temp_path = temp_file.to_str().unwrap();
-
-        // Save to file
-        kg.save_to_file(temp_path).unwrap();
-
-        // Load back
-        let loaded_kg = KnowledgeGraph::load_from_file(temp_path).unwrap();
-
-        // Clean up
-        std::fs::remove_file(temp_path).unwrap();
-
-        // Check entities
-        assert_eq!(loaded_kg.entities.len(), 2);
-        assert!(loaded_kg.get_entity(&id_a).is_some());
-        assert!(loaded_kg.get_entity(&id_b).is_some());
-
-        // Check relationships are restored
-        let relationships = loaded_kg.get_outgoing_relationships(&id_a);
-        assert_eq!(relationships.len(), 1);
-        assert_eq!(relationships[0].target_id.0, "B");
-        assert!(matches!(
-            relationships[0].relationship_type,
-            RelationshipType::Calls
-        ));
-    }
+    // NOTE: Serialization/deserialization test removed as we no longer support direct file operations
 
     #[test]
     fn test_large_graph() {

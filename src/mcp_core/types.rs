@@ -60,12 +60,6 @@ impl CapabilitiesBuilder {
         self
     }
 
-    pub fn with_resources(mut self, read: bool, write: bool) -> Self {
-        self.resources_read = read;
-        self.resources_write = write;
-        self
-    }
-
     pub fn build(self) -> ServerCapabilities {
         ServerCapabilities {
             tools: self.tools,
@@ -101,17 +95,6 @@ pub struct Resource {
     pub description: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub writeable: Option<bool>,
-}
-
-impl Resource {
-    pub fn new(uri: String, name: String, description: String, writeable: Option<bool>) -> Self {
-        Self {
-            uri,
-            name,
-            description,
-            writeable,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

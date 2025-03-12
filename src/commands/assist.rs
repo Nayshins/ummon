@@ -1,4 +1,5 @@
 use anyhow::Result;
+use tracing;
 
 use crate::graph::knowledge_graph::KnowledgeGraph;
 use crate::prompt::context_builder::build_context;
@@ -11,8 +12,23 @@ pub async fn run(
 ) -> Result<()> {
     println!("AI Assist: {}", instruction);
 
-    // Load the KG
-    let kg = KnowledgeGraph::load_from_file("knowledge_graph.json")?;
+    // Load the knowledge graph from database
+    let db = crate::db::get_database("ummon.db")?;
+    let mut kg = KnowledgeGraph::new();
+
+    // Load entities from database
+    let entities = db.load_entities()?;
+    for entity in entities {
+        if let Err(e) = kg.add_boxed_entity(entity) {
+            tracing::warn!("Failed to add entity to knowledge graph: {}", e);
+        }
+    }
+
+    // Load relationships from database
+    let relationships = db.load_relationships()?;
+    for relationship in relationships {
+        kg.add_relationship(relationship);
+    }
 
     // Build relevant context
     let context = build_context(&kg, instruction);

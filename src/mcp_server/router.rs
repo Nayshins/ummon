@@ -1079,10 +1079,7 @@ impl Router for UmmonRouter {
     }
 
     fn capabilities(&self) -> ServerCapabilities {
-        CapabilitiesBuilder::new()
-            .with_tools(true)
-            .with_resources(true, false)
-            .build()
+        CapabilitiesBuilder::new().with_tools(true).build() // No resources supported
     }
 
     fn list_tools(&self) -> Vec<Tool> {
@@ -1268,12 +1265,7 @@ impl Router for UmmonRouter {
     }
 
     fn list_resources(&self) -> Vec<Resource> {
-        vec![Resource::new(
-            "knowledge_graph.json".to_string(),
-            "Knowledge Graph".to_string(),
-            "The full knowledge graph in JSON format".to_string(),
-            Some(false),
-        )]
+        vec![] // No resources exposed directly
     }
 
     fn read_resource(
@@ -1281,24 +1273,9 @@ impl Router for UmmonRouter {
         uri: &str,
     ) -> Pin<Box<dyn Future<Output = Result<String, ResourceError>> + Send + 'static>> {
         let uri = uri.to_string();
-        let router = self.clone();
 
-        Box::pin(async move {
-            match uri.as_str() {
-                "knowledge_graph.json" => {
-                    let json =
-                        serde_json::to_string_pretty(&*router.knowledge_graph).map_err(|e| {
-                            ResourceError::Internal(format!(
-                                "Failed to serialize knowledge graph: {}",
-                                e
-                            ))
-                        })?;
-
-                    Ok(json)
-                }
-                _ => Err(ResourceError::NotFound(uri)),
-            }
-        })
+        // No resources are available
+        Box::pin(async move { Err(ResourceError::NotFound(uri)) })
     }
 }
 

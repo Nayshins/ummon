@@ -13,6 +13,7 @@ pub use parser::parse_query;
 pub use parser::QueryType;
 
 use anyhow::Result;
+use tracing;
 
 use crate::{graph::knowledge_graph::KnowledgeGraph, prompt::llm_integration::get_llm_config};
 
@@ -79,8 +80,23 @@ impl Default for QueryOptions {
 
 /// Convenience function to execute a query with options
 pub async fn execute_query(query_str: &str, options: QueryOptions) -> Result<String> {
-    // Load the knowledge graph
-    let kg = KnowledgeGraph::load_from_file("knowledge_graph.json")?;
+    // Load the knowledge graph from database
+    let db = crate::db::get_database("ummon.db")?;
+    let mut kg = KnowledgeGraph::new();
+
+    // Load entities from database
+    let entities = db.load_entities()?;
+    for entity in entities {
+        if let Err(e) = kg.add_boxed_entity(entity) {
+            tracing::warn!("Failed to add entity to knowledge graph: {}", e);
+        }
+    }
+
+    // Load relationships from database
+    let relationships = db.load_relationships()?;
+    for relationship in relationships {
+        kg.add_relationship(relationship);
+    }
 
     // Process the query
     let result = process_query(
