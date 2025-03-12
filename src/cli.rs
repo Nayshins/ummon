@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand};
 
 /// Ummon: A code analysis tool that builds knowledge graphs from codebases
 #[derive(Parser)]
@@ -105,28 +105,6 @@ pub enum Commands {
         llm_model: Option<String>,
     },
 
-    /// Start an MCP server for AI agent interaction
-    Serve {
-        /// Transport type to use for the MCP server
-        #[arg(long, short, default_value = "stdin-stdout")]
-        transport: TransportType,
-    },
-}
-
-#[derive(Clone, Debug, ValueEnum)]
-pub enum TransportType {
-    /// Use stdin/stdout for communication (for CLI tool integration)
-    StdinStdout,
-
-    /// Use HTTP server (for networked integration)
-    Http,
-}
-
-impl std::fmt::Display for TransportType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TransportType::StdinStdout => write!(f, "stdin-stdout"),
-            TransportType::Http => write!(f, "http"),
-        }
-    }
+    /// Start an MCP server for AI agent interaction with stdin/stdout transport
+    Serve,
 }

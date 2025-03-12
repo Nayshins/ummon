@@ -71,7 +71,7 @@ async fn main() -> Result<()> {
             commands::assist::run(&instruction, llm_provider.as_deref(), llm_model.as_deref())
                 .await?
         }
-        cli::Commands::Serve { transport } => commands::serve::run(&transport).await?,
+        cli::Commands::Serve => commands::serve::run().await?,
     }
 
     Ok(())

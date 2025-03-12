@@ -4,12 +4,11 @@ use tokio::io::stdin;
 use tokio::io::stdout;
 use tracing::{error, info};
 
-use crate::cli::TransportType;
 use crate::graph::knowledge_graph::KnowledgeGraph;
 use crate::mcp_server::{ByteTransport, Server, UmmonRouter};
 
-/// Run the MCP server with the specified transport
-pub async fn run(transport_type: &TransportType) -> Result<()> {
+/// Run the MCP server with stdin/stdout transport
+pub async fn run() -> Result<()> {
     info!("Starting Ummon MCP server");
 
     // Try to load the knowledge graph
@@ -45,29 +44,11 @@ pub async fn run(transport_type: &TransportType) -> Result<()> {
     let router = UmmonRouter::new(knowledge_graph);
     let server = Server::new(router);
 
-    match transport_type {
-        TransportType::StdinStdout => {
-            info!("Using stdin/stdout transport");
-            info!("Server is ready to receive JSON-RPC requests - connect a compatible client");
-            info!("Available tools: search_code, get_entity, debug_graph");
-            // Use only stderr for logging when using stdin/stdout for the protocol
-            let transport = ByteTransport::new(stdin(), stdout());
-            server.run(transport).await?;
-        }
-        TransportType::Http => {
-            #[cfg(feature = "http")]
-            {
-                info!("Using HTTP transport");
-                // HTTP transport implementation would go here
-                unimplemented!("HTTP transport is not yet implemented");
-            }
-            #[cfg(not(feature = "http"))]
-            {
-                error!("HTTP transport is not available in this build");
-                return Err(anyhow::anyhow!("HTTP transport not available"));
-            }
-        }
-    }
+    info!("Using stdin/stdout transport");
+    info!("Server is ready to receive JSON-RPC requests - connect a compatible client");
+    info!("Available tools: search_code, get_entity, debug_graph");
+    let transport = ByteTransport::new(stdin(), stdout());
+    server.run(transport).await?;
 
     Ok(())
 }

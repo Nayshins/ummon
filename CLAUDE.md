@@ -27,13 +27,8 @@ cargo fmt
 - Ensure all tests pass with `cargo test`
 
 ## Test Structure
-Tests have been set up as inline modules within each source file using Rust's `#[cfg(test)]` attribute. Test files that need completion:
+Tests have been set up as inline modules within each source file using Rust's `#[cfg(test)]` attribute.
 
-- `/src/graph/knowledge_graph.rs` - Tests for the KnowledgeGraph implementation
-- `/src/graph/entity.rs` - Tests for Entity implementations
-- `/src/graph/relationship.rs` - Tests for Relationship implementations
-
-The test skeletons are commented out to avoid compilation issues, and need to be properly implemented with correct imports.
 
 ## Code Style Guidelines
 - **Imports**: Group standard library imports first, followed by external crates, then local modules
