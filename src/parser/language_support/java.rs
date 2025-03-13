@@ -645,11 +645,11 @@ public class TestClass {
 
         // Test function parsing
         let functions = parser.parse_functions(java_code, "Test.java").unwrap();
-        assert!(functions.len() > 0);
+        assert!(!functions.is_empty());
 
         // Test types parsing
         let types = parser.parse_types(java_code, "Test.java").unwrap();
-        assert!(types.len() > 0);
+        assert!(!types.is_empty());
 
         // Basic module parsing
         let module = parser.parse_modules(java_code, "Test.java").unwrap();

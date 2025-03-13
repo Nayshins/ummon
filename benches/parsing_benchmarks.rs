@@ -1,7 +1,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::fs;
 use std::io::Write;
-use std::path::Path;
 use tempfile::tempdir;
 use ummon::parser::language_support::get_parser_for_file;
 

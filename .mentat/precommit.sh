@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# Source cargo environment to ensure it's in the path
+if [ -f "$HOME/.cargo/env" ]; then
+    source "$HOME/.cargo/env"
+fi
+
 # Format code - always run this as mentioned in the development guide
 cargo fmt
 

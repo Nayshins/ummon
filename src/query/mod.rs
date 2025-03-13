@@ -9,8 +9,6 @@ pub use nl_translator::NaturalLanguageTranslator;
 pub use parser::parse_query;
 
 // Only re-export QueryType for test modules
-#[cfg(test)]
-pub use parser::QueryType;
 
 use crate::{graph::knowledge_graph::KnowledgeGraph, prompt::llm_integration::get_llm_config};
 use anyhow::Result;
