@@ -3,3 +3,4 @@
 knowledge_graph.json
 ummon.db
 *.db
+.mentat/logs
