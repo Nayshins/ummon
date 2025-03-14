@@ -131,7 +131,7 @@ fn index_entities(
 
         indexed_files.insert(file_path.clone());
 
-        if let Some(mut parser) = get_parser_for_file(path) {
+        if let Ok(Some(mut parser)) = get_parser_for_file(path) {
             let content = std::fs::read_to_string(path)?;
 
             // Process file as a module
@@ -319,11 +319,11 @@ fn index_relationships(
             continue;
         }
 
-        if let Some(mut parser) = get_parser_for_file(path) {
+        if let Ok(Some(mut parser)) = get_parser_for_file(path) {
             let content = std::fs::read_to_string(path)?;
 
             // Process calls between functions
-            let calls = parser.parse_calls(&content)?;
+            let calls = parser.parse_calls(&content, &file_path)?;
             for call in calls {
                 // Add relationship between entities if they exist
                 // Create a more tolerant implementation that will try to make relationships even if exact IDs don't match
