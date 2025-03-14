@@ -1,4 +1,5 @@
 use anyhow::Result;
+use indoc::indoc;
 use std::env;
 use std::str::FromStr;
 
@@ -262,38 +263,40 @@ fn parse_entity_from_json(json: serde_json::Value) -> Option<DomainEntity> {
 /// Build a prompt for domain entity extraction
 fn build_domain_extraction_prompt(content: &str, file_path: &str) -> String {
     format!(
-        r#"You are an expert software engineer specializing in domain modeling and code comprehension. 
-Analyze the following code and extract domain entities (concepts) from it.
+        indoc! {r#"
+            You are an expert software engineer specializing in domain modeling and code comprehension. 
+            Analyze the following code and extract domain entities (concepts) from it.
 
-File: {}
+            File: {}
 
-```
-{}
-```
+            ```
+            {}
+            ```
 
-Identify all entities (classes, interfaces, data structures, functions) that represent important concepts in this codebase.
-Don't limit yourself to just business concepts - extract technical concepts as well.
-For each entity:
-1. Provide a name
-2. Classify its type (Class, Struct, Enum, Interface)
-3. List attributes with their types
-4. Describe relationships to other entities
-5. Add a brief description of the entity's purpose and role in the system
+            Identify all entities (classes, interfaces, data structures, functions) that represent important concepts in this codebase.
+            Don't limit yourself to just business concepts - extract technical concepts as well.
+            For each entity:
+            1. Provide a name
+            2. Classify its type (Class, Struct, Enum, Interface)
+            3. List attributes with their types
+            4. Describe relationships to other entities
+            5. Add a brief description of the entity's purpose and role in the system
 
-Look for:
-- Data structures that represent domain entities
-- Key abstractions that organize functionality
-- Core concepts mentioned in comments or function names
-- Important technical patterns or architectural components
+            Look for:
+            - Data structures that represent domain entities
+            - Key abstractions that organize functionality
+            - Core concepts mentioned in comments or function names
+            - Important technical patterns or architectural components
 
-Format your response as a JSON array containing entity objects with these fields:
-- name: string
-- entity_type: "Class" | "Struct" | "Enum" | "Interface"
-- description: string
-- attributes: object mapping attribute names to types
-- relationships: array of objects with {{target_entity: string, relation_type: "Inherits"|"Contains"|"References"|"Implements"}}
+            Format your response as a JSON array containing entity objects with these fields:
+            - name: string
+            - entity_type: "Class" | "Struct" | "Enum" | "Interface"
+            - description: string
+            - attributes: object mapping attribute names to types
+            - relationships: array of objects with {{target_entity: string, relation_type: "Inherits"|"Contains"|"References"|"Implements"}}
 
-Only provide the JSON with no other text."#,
+            Only provide the JSON with no other text.
+        "#},
         file_path, content
     )
 }

@@ -1,4 +1,5 @@
 use super::*;
+use indoc::indoc;
 use tree_sitter::{Node, Parser};
 
 pub struct JavaParser {
@@ -912,24 +913,24 @@ mod tests {
 
     #[test]
     fn test_java_basic_parsing() {
-        let java_code = r#"
-package com.example;
+        let java_code = indoc! {r#"
+            package com.example;
 
-/**
- * Example class documentation
- */
-public class TestClass {
-    private String field1;
+            /**
+             * Example class documentation
+             */
+            public class TestClass {
+                private String field1;
 
-    public TestClass(String initialValue) {
-        this.field1 = initialValue;
-    }
+                public TestClass(String initialValue) {
+                    this.field1 = initialValue;
+                }
 
-    public void testMethod(String input) {
-        System.out.println(input);
-    }
-}
-"#;
+                public void testMethod(String input) {
+                    System.out.println(input);
+                }
+            }
+        "#};
 
         let mut parser = JavaParser::new();
 
@@ -1028,22 +1029,22 @@ public class TestClass {
         let mut parser = JavaParser::new();
 
         // Test with generic parameters at boundaries
-        let boundary_code = r#"
-package com.example;
+        let boundary_code = indoc! {r#"
+            package com.example;
 
-import java.util.List;
-import java.util.Map;
+            import java.util.List;
+            import java.util.Map;
 
-// Class with generic parameters where the bracket is at the end of a line
-public class BoundaryCase<T
-    extends CharSequence> {
+            // Class with generic parameters where the bracket is at the end of a line
+            public class BoundaryCase<T
+                extends CharSequence> {
 
-    // Method with weird boundary parameter extraction
-    public <E> List<E> process(Map<String, E> items) {
-        return null;
-    }
-}
-"#;
+                // Method with weird boundary parameter extraction
+                public <E> List<E> process(Map<String, E> items) {
+                    return null;
+                }
+            }
+        "#};
 
         // This should parse without errors
         let types = parser.parse_types(boundary_code, "boundary.java").unwrap();
@@ -1070,36 +1071,36 @@ public class BoundaryCase<T
 
     #[test]
     fn test_java_field_extraction() {
-        let java_code = r#"
-package com.example;
+        let java_code = indoc! {r#"
+            package com.example;
 
-import java.util.Optional;
+            import java.util.Optional;
 
-/**
- * Class with various field types for testing
- */
-public class FieldTest {
-    // Basic fields with various visibilities
-    public String publicField;
-    private int privateField = 42;
-    protected boolean protectedField;
+            /**
+             * Class with various field types for testing
+             */
+            public class FieldTest {
+                // Basic fields with various visibilities
+                public String publicField;
+                private int privateField = 42;
+                protected boolean protectedField;
 
-    // Static field
-    private static final String CONSTANT = "constant value";
+                // Static field
+                private static final String CONSTANT = "constant value";
 
-    // Field with annotations
-    @Deprecated
-    public long annotatedField;
+                // Field with annotations
+                @Deprecated
+                public long annotatedField;
 
-    // Optional field (should be detected as optional)
-    private Optional<String> optionalField = Optional.empty();
+                // Optional field (should be detected as optional)
+                private Optional<String> optionalField = Optional.empty();
 
-    /**
-     * Documented field
-     */
-    public String documentedField;
-}
-"#;
+                /**
+                 * Documented field
+                 */
+                public String documentedField;
+            }
+        "#};
 
         let mut parser = JavaParser::new();
         let types = parser.parse_types(java_code, "FieldTest.java").unwrap();
@@ -1131,7 +1132,7 @@ public class FieldTest {
     #[test]
     fn test_java_generic_parameters() {
         let mut parser = JavaParser::new();
-        let content = r#"
+        let content = indoc! {r#"
             public class Box<T> {
                 private T value;
 
@@ -1153,7 +1154,7 @@ public class FieldTest {
                     return data;
                 }
             }
-        "#;
+        "#};
 
         let types = parser.parse_types(content, "Box.java").unwrap();
         assert_eq!(types.len(), 3, "Expected three types");

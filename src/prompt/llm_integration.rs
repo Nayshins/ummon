@@ -1,4 +1,5 @@
 use anyhow::Result;
+use indoc::indoc;
 use reqwest::Client;
 use serde_json::Value;
 use std::str::FromStr;
@@ -100,7 +101,7 @@ pub fn get_llm_config(cli_provider: Option<&str>, cli_model: Option<&str>) -> Ll
 pub async fn query_llm(prompt: &str, config: &LlmConfig) -> Result<String> {
     // Use mock response if no API key is provided
     if config.api_key.is_empty() || config.provider == LlmProvider::Mock {
-        return Ok(r#"[
+        return Ok(indoc! {r#"[
             {
                 "name": "MockEntity",
                 "entity_type": "Class",
@@ -111,7 +112,7 @@ pub async fn query_llm(prompt: &str, config: &LlmConfig) -> Result<String> {
                 },
                 "relationships": []
             }
-        ]"#
+        ]"#}
         .to_string());
     }
 

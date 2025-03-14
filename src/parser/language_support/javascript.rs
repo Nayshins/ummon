@@ -1,5 +1,6 @@
 use super::*;
 use anyhow::Result;
+use indoc::indoc;
 use std::path::Path;
 use tree_sitter::{Node, Parser};
 
@@ -564,11 +565,11 @@ mod tests {
     #[test]
     fn test_parse_function_declaration() -> Result<()> {
         let mut parser = JavaScriptParser::new();
-        let content = r#"
+        let content = indoc! {r#"
             function hello(name) {
                 console.log(`Hello, ${name}!`);
             }
-        "#;
+        "#};
 
         let functions = parser.parse_functions(content, "test.js")?;
         assert_eq!(functions.len(), 1);
@@ -644,7 +645,7 @@ mod tests {
         let mut parser = JavaScriptParser::new();
 
         // Test with generic parameters at boundaries and complex type annotations
-        let boundary_code = r#"
+        let boundary_code = indoc! {r#"
         // Class with generic parameters
         class GenericExample<
             T extends string,
@@ -655,7 +656,7 @@ mod tests {
                 return [];
             }
         }
-        "#;
+        "#};
 
         // This should parse without errors
         let types = parser.parse_types(boundary_code, "boundary.ts")?;
@@ -674,7 +675,7 @@ mod tests {
     #[test]
     fn test_parse_class_method() -> Result<()> {
         let mut parser = JavaScriptParser::new();
-        let content = r#"
+        let content = indoc! {r#"
             class Example {
                 constructor(name) {
                     this.name = name;
@@ -688,7 +689,7 @@ mod tests {
                     return 'private';
                 }
             }
-        "#;
+        "#};
 
         let functions = parser.parse_functions(content, "test.js")?;
         assert_eq!(functions.len(), 3);
@@ -713,11 +714,11 @@ mod tests {
     #[test]
     fn test_parse_arrow_function() -> Result<()> {
         let mut parser = JavaScriptParser::new();
-        let content = r#"
+        let content = indoc! {r#"
             const greet = (name) => {
                 console.log(`Hello, ${name}!`);
             };
-        "#;
+        "#};
 
         let functions = parser.parse_functions(content, "test.js")?;
         assert_eq!(functions.len(), 1);
@@ -732,13 +733,13 @@ mod tests {
     #[test]
     fn test_parse_calls() -> Result<()> {
         let mut parser = JavaScriptParser::new();
-        let content = r#"
+        let content = indoc! {r#"
             function test() {
                 console.log('test');
                 someObject.method();
                 helper();
             }
-        "#;
+        "#};
 
         let calls = parser.parse_calls(content, "test.js")?;
         assert_eq!(calls.len(), 3);
@@ -777,7 +778,7 @@ mod tests {
     #[test]
     fn test_typescript_generic_parameters() -> Result<()> {
         let mut parser = JavaScriptParser::new();
-        let content = r#"
+        let content = indoc! {r#"
             // Use standard JS syntax for the class
             class Box {
                 constructor(value) {
@@ -788,7 +789,7 @@ mod tests {
                     return this.value;
                 }
             }
-        "#;
+        "#};
 
         let types = parser.parse_types(content, "test.js")?;
 
