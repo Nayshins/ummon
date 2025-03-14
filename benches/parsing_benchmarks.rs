@@ -265,7 +265,9 @@ pub fn bench_parsing(c: &mut Criterion) {
         let file_path_str = file_path.to_string_lossy().to_string();
 
         // Create a parser for the language
-        let mut parser = get_parser_for_file(&file_path).expect("Failed to get parser");
+        let mut parser = get_parser_for_file(&file_path)
+            .expect("Failed to access language parsers")
+            .expect("No parser available for this file type");
 
         // Benchmark function parsing
         group.bench_with_input(
@@ -283,7 +285,7 @@ pub fn bench_parsing(c: &mut Criterion) {
 
         // Benchmark call parsing
         group.bench_with_input(BenchmarkId::new("parse_calls", lang), &lang, |b, _lang| {
-            b.iter(|| parser.parse_calls(&content).unwrap());
+            b.iter(|| parser.parse_calls(&content, &file_path_str).unwrap());
         });
     }
 
