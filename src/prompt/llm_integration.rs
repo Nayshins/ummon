@@ -112,7 +112,8 @@ pub async fn query_llm(prompt: &str, config: &LlmConfig) -> Result<String> {
                 },
                 "relationships": []
             }
-        ]"#}.to_string());
+        ]"#}
+        .to_string());
     }
 
     tracing::info!(
