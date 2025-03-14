@@ -8,7 +8,6 @@ pub use formatter::{OutputFormat, ResultFormatter};
 pub use nl_translator::NaturalLanguageTranslator;
 pub use parser::parse_query;
 
-
 use crate::{graph::knowledge_graph::KnowledgeGraph, prompt::llm_integration::get_llm_config};
 use anyhow::Result;
 
