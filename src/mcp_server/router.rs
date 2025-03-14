@@ -1,3 +1,4 @@
+use indoc::indoc;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::future::Future;
@@ -1047,26 +1048,26 @@ impl Router for UmmonRouter {
     }
 
     fn instructions(&self) -> String {
-        r#"
-        This MCP server provides tools to query and analyze the Ummon code knowledge graph.
-        
-        Available tools:
-        
-        Basic Knowledge Graph Tools:
-        - search_code: Search for code entities using a natural language query
-        - get_entity: Get detailed information about a specific entity
-        - debug_graph: Get information about the loaded knowledge graph
-        
-        Enhanced Agent Tools:
-        - find_relevant_files: Find the most relevant files for a specific task or feature
-        - explore_relationships: Explore and explain relationships between entities
-        - explain_architecture: Provide an architectural overview of the codebase or a specific area
-        
-        Recommended workflow:
-        1. Start with explain_architecture to understand the overall structure
-        2. Use find_relevant_files to identify components related to your task
-        3. Explore specific entities with get_entity and explore_relationships
-        "#
+        indoc! {r#"
+            This MCP server provides tools to query and analyze the Ummon code knowledge graph.
+            
+            Available tools:
+            
+            Basic Knowledge Graph Tools:
+            - search_code: Search for code entities using a natural language query
+            - get_entity: Get detailed information about a specific entity
+            - debug_graph: Get information about the loaded knowledge graph
+            
+            Enhanced Agent Tools:
+            - find_relevant_files: Find the most relevant files for a specific task or feature
+            - explore_relationships: Explore and explain relationships between entities
+            - explain_architecture: Provide an architectural overview of the codebase or a specific area
+            
+            Recommended workflow:
+            1. Start with explain_architecture to understand the overall structure
+            2. Use find_relevant_files to identify components related to your task
+            3. Explore specific entities with get_entity and explore_relationships
+        "#}
         .to_string()
     }
 

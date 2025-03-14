@@ -1,4 +1,5 @@
 use anyhow::Result;
+use indoc::indoc;
 use log::{debug, error, info};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
@@ -81,8 +82,8 @@ impl Database {
         let conn = self.get_connection()?;
 
         // Simple schema creation - all statements use IF NOT EXISTS
-        conn.execute_batch(
-            "CREATE TABLE IF NOT EXISTS schema_version (
+        conn.execute_batch(indoc! {r#"
+            CREATE TABLE IF NOT EXISTS schema_version (
                 version INTEGER PRIMARY KEY
             );
             
@@ -117,8 +118,8 @@ impl Database {
             CREATE INDEX IF NOT EXISTS idx_rel_type ON relationships(relationship_type);
             
             -- Initialize version if needed (using OR IGNORE to avoid errors if already exists)
-            INSERT OR IGNORE INTO schema_version (version) VALUES (1);",
-        )?;
+            INSERT OR IGNORE INTO schema_version (version) VALUES (1);
+        "#})?;
 
         debug!("Database schema initialized successfully");
         Ok(())

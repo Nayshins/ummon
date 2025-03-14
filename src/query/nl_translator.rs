@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use indoc::indoc;
 
 use crate::prompt::llm_integration::{query_llm, LlmConfig};
 
@@ -31,68 +32,69 @@ impl NaturalLanguageTranslator {
     /// Build a prompt for the LLM to translate a natural language query
     fn build_translation_prompt(&self, natural_query: &str) -> String {
         format!(
-            r#"# Ummon Query Language Translation Task
+            indoc! {r#"
+                # Ummon Query Language Translation Task
 
-Your task is to translate a natural language query into Ummon's query language. Ummon has a simple, structured query language for accessing a knowledge graph of code entities.
+                Your task is to translate a natural language query into Ummon's query language. Ummon has a simple, structured query language for accessing a knowledge graph of code entities.
 
-## Ummon Query Language Syntax
-Ummon's query language supports two main query types:
+                ## Ummon Query Language Syntax
+                Ummon's query language supports two main query types:
 
-1. **Select queries** - to find entities by type with optional conditions:
-   `select [entity_type] where [conditions]`
+                1. **Select queries** - to find entities by type with optional conditions:
+                   `select [entity_type] where [conditions]`
 
-2. **Traversal queries** - to find relationships between entities:
-   `[entity_type] [relationship] [entity_type] where [conditions]`
+                2. **Traversal queries** - to find relationships between entities:
+                   `[entity_type] [relationship] [entity_type] where [conditions]`
 
-### Entity Types
-- `functions` - Functions in code
-- `methods` - Methods in classes
-- `classes` - Classes or types  
-- `modules` - Modules or files
-- `variables` - Variables or fields
-- `constants` - Constant values
-- `domain_concepts` - Business domain concepts
+                ### Entity Types
+                - `functions` - Functions in code
+                - `methods` - Methods in classes
+                - `classes` - Classes or types  
+                - `modules` - Modules or files
+                - `variables` - Variables or fields
+                - `constants` - Constant values
+                - `domain_concepts` - Business domain concepts
 
-### Relationships
-- `calls`/`calling` - Function/method calls another
-- `contains`/`containing` - Entity contains another
-- `imports`/`importing` - Entity imports another
-- `inherits`/`inheriting` - Class inherits from another
-- `implements`/`implementing` - Class implements interface
-- `references`/`referencing` - Entity references another
-- `uses`/`using` - Entity uses another
-- `depends_on`/`depending` - Entity depends on another
-- `represented_by` - Domain concept is represented by code
-- `relates_to` - General relationship between entities
+                ### Relationships
+                - `calls`/`calling` - Function/method calls another
+                - `contains`/`containing` - Entity contains another
+                - `imports`/`importing` - Entity imports another
+                - `inherits`/`inheriting` - Class inherits from another
+                - `implements`/`implementing` - Class implements interface
+                - `references`/`referencing` - Entity references another
+                - `uses`/`using` - Entity uses another
+                - `depends_on`/`depending` - Entity depends on another
+                - `represented_by` - Domain concept is represented by code
+                - `relates_to` - General relationship between entities
 
-### Conditions
-- `[attribute] [operator] [value]` - e.g., `name = 'auth'` or `file_path like 'src/%'`
-- Attributes include: `name`, `file_path`, `documentation`, `confidence`
-- Operators include: `=`, `!=`, `>`, `<`, `>=`, `<=`, `like` (supports % wildcard)
-- Logical operators: `and`, `or`, `not`
-- Grouping with parentheses: `(name like 'auth%' or name like 'login%')`
-- Existence check: `has documentation`
+                ### Conditions
+                - `[attribute] [operator] [value]` - e.g., `name = 'auth'` or `file_path like 'src/%'`
+                - Attributes include: `name`, `file_path`, `documentation`, `confidence`
+                - Operators include: `=`, `!=`, `>`, `<`, `>=`, `<=`, `like` (supports % wildcard)
+                - Logical operators: `and`, `or`, `not`
+                - Grouping with parentheses: `(name like 'auth%' or name like 'login%')`
+                - Existence check: `has documentation`
 
-## Examples
-- "Show me all functions" → `select functions`
-- "Find functions with names starting with auth" → `select functions where name like 'auth%'`
-- "Show classes in the src directory" → `select classes where file_path like 'src/%'`
-- "Find functions that call authentication functions" → `functions calling functions where name like 'auth%'`
-- "List classes containing getter methods" → `classes containing methods where name like 'get%'`
-- "What domain concepts have high confidence?" → `select domain_concepts where confidence > 0.8`
-- "Show functions related to authentication or login" → `select functions where name like 'auth%' or name like 'login%'`
-- "Find functions in auth module that implement validation" → `select functions where file_path like '%auth%' and (name like '%validate%' or name like '%check%')`
+                ## Examples
+                - "Show me all functions" → `select functions`
+                - "Find functions with names starting with auth" → `select functions where name like 'auth%'`
+                - "Show classes in the src directory" → `select classes where file_path like 'src/%'`
+                - "Find functions that call authentication functions" → `functions calling functions where name like 'auth%'`
+                - "List classes containing getter methods" → `classes containing methods where name like 'get%'`
+                - "What domain concepts have high confidence?" → `select domain_concepts where confidence > 0.8`
+                - "Show functions related to authentication or login" → `select functions where name like 'auth%' or name like 'login%'`
+                - "Find functions in auth module that implement validation" → `select functions where file_path like '%auth%' and (name like '%validate%' or name like '%check%')`
 
-## Your Task
-Translate the following natural language query into Ummon's query language:
+                ## Your Task
+                Translate the following natural language query into Ummon's query language:
 
-"{}"
+                "{}"
 
-Provide your answer in this format:
-TRANSLATED_QUERY: <your translated query>
-CONFIDENCE: <your confidence score between 0 and 1>
-EXPLANATION: <brief explanation>
-"#,
+                Provide your answer in this format:
+                TRANSLATED_QUERY: <your translated query>
+                CONFIDENCE: <your confidence score between 0 and 1>
+                EXPLANATION: <brief explanation>
+            "#},
             natural_query
         )
     }

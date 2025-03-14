@@ -1,4 +1,5 @@
 use super::*;
+use indoc::indoc;
 use tree_sitter::{Node, Parser};
 
 pub struct PythonParser {
@@ -865,23 +866,23 @@ mod tests {
 
     #[test]
     fn test_python_function_parameter_extraction() {
-        let python_code = r#"
-def simple_function(a, b=10, c: str = "default"):
-    return a + b
+        let python_code = indoc! {r#"
+            def simple_function(a, b=10, c: str = "default"):
+                return a + b
 
-class TestClass:
-    def method_with_self(self, param1, param2: int):
-        return param1 + param2
+            class TestClass:
+                def method_with_self(self, param1, param2: int):
+                    return param1 + param2
 
-    @classmethod
-    def class_method(cls, data):
-        return data
+                @classmethod
+                def class_method(cls, data):
+                    return data
 
-def function_with_args(a, *args, **kwargs):
-    return a
+            def function_with_args(a, *args, **kwargs):
+                return a
 
-lambda_func = lambda x, y: x + y
-"#;
+            lambda_func = lambda x, y: x + y
+        "#};
 
         let mut parser = PythonParser::new();
         let results = parser.parse_functions(python_code, "test.py").unwrap();
@@ -1005,15 +1006,15 @@ lambda_func = lambda x, y: x + y
         let mut parser = PythonParser::new();
 
         // Test with a class that has Generic parameters at boundary positions
-        let boundary_code = r#"
-from typing import Generic, TypeVar
+        let boundary_code = indoc! {r#"
+            from typing import Generic, TypeVar
 
-T = TypeVar('T')
+            T = TypeVar('T')
 
-# This class has a Generic parameter right at the end of the line
-class BoundaryClass(Generic[T]):
-    pass
-"#;
+            # This class has a Generic parameter right at the end of the line
+            class BoundaryClass(Generic[T]):
+                pass
+        "#};
 
         // This should parse without errors
         let types = parser.parse_types(boundary_code, "boundary.py").unwrap();
@@ -1037,23 +1038,23 @@ class BoundaryClass(Generic[T]):
 
     #[test]
     fn test_python_class_field_extraction() {
-        let python_code = r#"
-from typing import Optional, Union, Lis
+        let python_code = indoc! {r#"
+            from typing import Optional, Union, Lis
 
-class TestClass:
-    # Class variables with defaults, types, and optionals
-    public_field = "default value"
-    _protected_field = 42
-    __private_field = True
+            class TestClass:
+                # Class variables with defaults, types, and optionals
+                public_field = "default value"
+                _protected_field = 42
+                __private_field = True
 
-    typed_field: str = "typed default"
-    optional_field: Optional[int] = None
-    union_optional: Union[str, None] = "default"
+                typed_field: str = "typed default"
+                optional_field: Optional[int] = None
+                union_optional: Union[str, None] = "default"
 
-    @property
-    def computed_property(self):
-        return self.public_field
-"#;
+                @property
+                def computed_property(self):
+                    return self.public_field
+        "#};
 
         let mut parser = PythonParser::new();
         let results = parser.parse_types(python_code, "test.py").unwrap();
@@ -1085,33 +1086,33 @@ class TestClass:
 
     #[test]
     fn test_python_nested_entities() {
-        let python_code = r#"
-# Outer class with nested class and methods
-class OuterClass:
-    outer_field = "outer value"
+        let python_code = indoc! {r#"
+            # Outer class with nested class and methods
+            class OuterClass:
+                outer_field = "outer value"
 
-    def outer_method(self):
-        # Nested function inside method
-        def inner_function():
-            return "inner function result"
+                def outer_method(self):
+                    # Nested function inside method
+                    def inner_function():
+                        return "inner function result"
 
-        return inner_function()
+                    return inner_function()
 
-    # Nested class inside OuterClass
-    class InnerClass:
-        inner_field = "inner value"
+                # Nested class inside OuterClass
+                class InnerClass:
+                    inner_field = "inner value"
 
-        def inner_method(self):
-            return self.inner_field
+                    def inner_method(self):
+                        return self.inner_field
 
-# Function with nested function
-def outer_function():
-    # Nested function
-    def nested_function():
-        return "nested result"
+            # Function with nested function
+            def outer_function():
+                # Nested function
+                def nested_function():
+                    return "nested result"
 
-    return nested_function()
-"#;
+                return nested_function()
+        "#};
 
         let mut parser = PythonParser::new();
 
@@ -1164,25 +1165,25 @@ def outer_function():
 
     #[test]
     fn test_python_generic_parameters() {
-        let python_code = r#"
-from typing import Generic, TypeVar, List, Dict, Optional
+        let python_code = indoc! {r#"
+            from typing import Generic, TypeVar, List, Dict, Optional
 
-T = TypeVar('T')
-U = TypeVar('U', bound='Comparable')
-V = TypeVar('V', str, bytes)
+            T = TypeVar('T')
+            U = TypeVar('U', bound='Comparable')
+            V = TypeVar('V', str, bytes)
 
-class Box(Generic[T]):
-    def __init__(self, item: T):
-        self.item = item
+            class Box(Generic[T]):
+                def __init__(self, item: T):
+                    self.item = item
 
-    def get_item(self) -> T:
-        return self.item
+                def get_item(self) -> T:
+                    return self.item
 
-class Pair(Generic[T, U]):
-    def __init__(self, first: T, second: U):
-        self.first = firs
-        self.second = second
-"#;
+            class Pair(Generic[T, U]):
+                def __init__(self, first: T, second: U):
+                    self.first = firs
+                    self.second = second
+        "#};
 
         let mut parser = PythonParser::new();
         let types = parser.parse_types(python_code, "test.py").unwrap();
