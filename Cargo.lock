@@ -1046,6 +1046,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "indoc"
+version = "1.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bfa799dd5ed20a7e349f3b4639aa80d74549c81716d9ec4f994c9b5815598306"
+
+[[package]]
 name = "ipnet"
 version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2254,6 +2260,7 @@ dependencies = [
  "env_logger",
  "futures",
  "ignore",
+ "indoc",
  "log",
  "once_cell",
  "pest",

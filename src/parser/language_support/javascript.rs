@@ -1,6 +1,5 @@
 use super::*;
 use anyhow::Result;
-use indoc::indoc;
 use std::path::Path;
 use tree_sitter::{Node, Parser};
 
@@ -317,7 +316,7 @@ impl LanguageParser for JavaScriptParser {
         file_path
             .extension()
             .and_then(|e| e.to_str())
-            .map_or(false, |ext| matches!(ext, "js" | "jsx" | "ts" | "tsx"))
+            .is_some_and(|ext| matches!(ext, "js" | "jsx" | "ts" | "tsx"))
     }
 
     /// Parses JavaScript functions and methods from the source code.
@@ -561,6 +560,7 @@ impl LanguageParser for JavaScriptParser {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use indoc::indoc;
 
     #[test]
     fn test_parse_function_declaration() -> Result<()> {

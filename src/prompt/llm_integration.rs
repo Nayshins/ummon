@@ -1,5 +1,4 @@
 use anyhow::Result;
-use indoc::indoc;
 use reqwest::Client;
 use serde_json::Value;
 use std::str::FromStr;
@@ -13,7 +12,6 @@ pub enum LlmProvider {
     Anthropic,
     GoogleVertexAI,
     Ollama,
-    Mock,
 }
 
 impl FromStr for LlmProvider {
@@ -26,7 +24,6 @@ impl FromStr for LlmProvider {
             "anthropic" => Ok(LlmProvider::Anthropic),
             "google" | "vertexai" | "vertex" => Ok(LlmProvider::GoogleVertexAI),
             "ollama" | "local" => Ok(LlmProvider::Ollama),
-            "mock" => Ok(LlmProvider::Mock),
             _ => Err(anyhow::anyhow!("Unknown LLM provider: {}", s)),
         }
     }
@@ -69,8 +66,7 @@ pub fn get_llm_config(cli_provider: Option<&str>, cli_model: Option<&str>) -> Ll
         LlmProvider::OpenAI => std::env::var("OPENAI_API_KEY").unwrap_or_default(),
         LlmProvider::Anthropic => std::env::var("ANTHROPIC_API_KEY").unwrap_or_default(),
         LlmProvider::GoogleVertexAI => std::env::var("GOOGLE_API_KEY").unwrap_or_default(),
-        LlmProvider::Ollama => String::new(),
-        LlmProvider::Mock => String::new(),
+        LlmProvider::Ollama => String::new(), // Ollama doesn't need an API key
     };
 
     let model = cli_model
@@ -82,7 +78,6 @@ pub fn get_llm_config(cli_provider: Option<&str>, cli_model: Option<&str>) -> Ll
             LlmProvider::Anthropic => "claude-3-5-haiku-20241022".to_string(),
             LlmProvider::GoogleVertexAI => "gemini-1.5-pro".to_string(),
             LlmProvider::Ollama => "llama3".to_string(),
-            LlmProvider::Mock => "mock".to_string(),
         });
 
     let endpoint_url = std::env::var("LLM_ENDPOINT").ok();
@@ -99,21 +94,14 @@ pub fn get_llm_config(cli_provider: Option<&str>, cli_model: Option<&str>) -> Ll
 
 /// Async function calling the selected LLM API with error handling and retries
 pub async fn query_llm(prompt: &str, config: &LlmConfig) -> Result<String> {
-    // Use mock response if no API key is provided
-    if config.api_key.is_empty() || config.provider == LlmProvider::Mock {
-        return Ok(indoc! {r#"[
-            {
-                "name": "MockEntity",
-                "entity_type": "Class",
-                "description": "This is a mock entity because no API key was provided",
-                "attributes": {
-                    "id": "String",
-                    "name": "String"
-                },
-                "relationships": []
-            }
-        ]"#}
-        .to_string());
+    // Check if API key is provided for providers that need it
+    let needs_api_key = !matches!(config.provider, LlmProvider::Ollama);
+
+    if needs_api_key && config.api_key.is_empty() {
+        return Err(anyhow::anyhow!(
+            "API key is required for provider: {:?}",
+            config.provider
+        ));
     }
 
     tracing::info!(
@@ -213,9 +201,6 @@ fn prepare_request_body(prompt: &str, config: &LlmConfig) -> Value {
                 "max_tokens": config.max_tokens
             })
         }
-        LlmProvider::Mock => {
-            serde_json::json!({}) // Not used
-        }
     }
 }
 
@@ -269,7 +254,6 @@ fn get_endpoint_url(config: &LlmConfig) -> String {
             config.model
         ),
         LlmProvider::Ollama => "http://localhost:11434/api/chat".to_string(),
-        LlmProvider::Mock => "".to_string(),
     }
 }
 
@@ -325,9 +309,6 @@ fn parse_response(json: Value, provider: LlmProvider) -> Result<String> {
                 return Ok(msg.to_string());
             }
         }
-        LlmProvider::Mock => {
-            // Mock response handling not needed here
-        }
     }
 
     // Check for error message in the response
@@ -379,7 +360,8 @@ mod tests {
             LlmProvider::Ollama
         );
         assert_eq!(LlmProvider::from_str("local").unwrap(), LlmProvider::Ollama);
-        assert_eq!(LlmProvider::from_str("mock").unwrap(), LlmProvider::Mock);
+        // Mock provider has been removed
+        assert!(LlmProvider::from_str("mock").is_err());
 
         // Test case insensitivity
         assert_eq!(

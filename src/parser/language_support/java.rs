@@ -1,5 +1,4 @@
 use super::*;
-use indoc::indoc;
 use tree_sitter::{Node, Parser};
 
 pub struct JavaParser {
@@ -514,10 +513,7 @@ impl JavaParser {
 
 impl LanguageParser for JavaParser {
     fn can_handle(&self, file_path: &Path) -> bool {
-        file_path
-            .extension()
-            .and_then(|ext| ext.to_str())
-            .map_or(false, |ext| ext == "java")
+        file_path.extension().and_then(|ext| ext.to_str()) == Some("java")
     }
 
     /// Parses Java methods and constructors from source code.
@@ -910,6 +906,7 @@ impl LanguageParser for JavaParser {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use indoc::indoc;
 
     #[test]
     fn test_java_basic_parsing() {

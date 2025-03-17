@@ -11,7 +11,8 @@ use crate::graph::relationship::{Relationship, RelationshipType};
 use crate::graph::KnowledgeGraph;
 use crate::parser::domain_model::RelationType;
 use crate::parser::language_support::{
-    get_parser_for_file, DomainConcept, FunctionDefinition, TypeDefinition,
+    get_parser_for_file, is_supported_source_file, DomainConcept, FunctionDefinition,
+    TypeDefinition,
 };
 
 /// Main entry point for the indexing command
@@ -126,6 +127,12 @@ fn index_entities(
 
         // Skip if already processed
         if indexed_files.contains(&file_path) {
+            continue;
+        }
+
+        // Skip if file has unsupported extension
+        if !is_supported_source_file(path) {
+            tracing::debug!("Skipping unsupported file type: {}", file_path);
             continue;
         }
 
@@ -316,6 +323,11 @@ fn index_relationships(
 
         // Skip if not previously indexed
         if !indexed_files.contains(&file_path) {
+            continue;
+        }
+
+        // Skip if file has unsupported extension
+        if !is_supported_source_file(path) {
             continue;
         }
 
@@ -513,19 +525,8 @@ async fn infer_domain_model(
             }
 
             // Process all source files, not just domain-specific files
-            // Get file extension to check if it's a source file
-            let extension = file_path_obj
-                .extension()
-                .and_then(|ext| ext.to_str())
-                .unwrap_or("");
-
             // Skip non-source files (binaries, images, etc.)
-            let is_source_file = matches!(
-                extension,
-                "rs" | "py" | "js" | "ts" | "c" | "cpp" | "h" | "hpp" | "java" | "go" | "rb"
-            );
-
-            if !is_source_file {
+            if !is_supported_source_file(file_path_obj) {
                 continue;
             }
 
