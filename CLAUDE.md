@@ -51,6 +51,15 @@ cargo fmt
 ## Test Structure
 Tests have been set up as inline modules within each source file using Rust's `#[cfg(test)]` attribute.
 
+## Test Principles
+- **CRITICAL**: When a test fails, NEVER change the test assertions to match incorrect implementation. Always:
+  1. Verify that the test assertions represent the correct expected behavior
+  2. If the test is correct, fix the implementation to match the expected behavior
+  3. Only modify test assertions if the test itself is incorrect (not to match buggy code)
+- Tests should be independent and not rely on external state or environment variables
+- Mock external dependencies rather than making real API calls
+- Each test should focus on a specific behavior or feature
+
 
 ## Code Style Guidelines
 - **Imports**: Group standard library imports first, followed by external crates, then local modules
@@ -91,3 +100,5 @@ Tests have been set up as inline modules within each source file using Rust's `#
 - **Sections**: Use comment blocks `// ---- SECTION NAME ----` to separate logical sections within large files
 - **Reasoning**: Include rationale for non-obvious implementation choices
 - **Minimalism**: Avoid adding comments for straightforward operations or self-explanatory code
+- **IMPORTANT**: Do NOT add inline comments that merely restate what the code already shows (e.g., "// Iterate through users" for a loop over users)
+- **CRITICAL**: Never use redundant or descriptive inline comments that explain the obvious function of the code

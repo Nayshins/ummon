@@ -179,7 +179,7 @@ mod tests {
     #[test]
     fn test_build_translation_prompt() {
         let config = LlmConfig {
-            provider: LlmProvider::Mock,
+            provider: LlmProvider::OpenAI,
             model: "dummy".to_string(),
             api_key: "dummy".to_string(),
             temperature: 0.0,
@@ -199,7 +199,7 @@ mod tests {
     #[test]
     fn test_extract_query_and_confidence() {
         let config = LlmConfig {
-            provider: LlmProvider::Mock,
+            provider: LlmProvider::OpenAI,
             model: "dummy".to_string(),
             api_key: "dummy".to_string(),
             temperature: 0.0,

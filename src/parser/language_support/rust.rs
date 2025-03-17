@@ -646,10 +646,7 @@ impl LanguageParser for RustParser {
     /// # Returns
     /// * `bool` - True if this parser can handle the file, false otherwise
     fn can_handle(&self, file_path: &Path) -> bool {
-        file_path
-            .extension()
-            .and_then(|ext| ext.to_str())
-            .map_or(false, |ext| ext == "rs")
+        file_path.extension().and_then(|ext| ext.to_str()) == Some("rs")
     }
 
     /// Safely extracts text from source code with bounds checking
@@ -753,7 +750,7 @@ impl LanguageParser for RustParser {
                     .parent()
                     .map(|p| {
                         p.kind() == "declaration_list"
-                            && p.parent().map_or(false, |gp| gp.kind() == "mod_item")
+                            && p.parent().is_some_and(|gp| gp.kind() == "mod_item")
                     })
                     .unwrap_or(false);
 
@@ -825,7 +822,7 @@ impl LanguageParser for RustParser {
         self.traverse_node(root_node, &mut |node| {
             if node.kind() == "function_item" {
                 let is_top_level = node.parent().is_none()
-                    || node.parent().map_or(false, |p| p.kind() == "source_file");
+                    || node.parent().is_some_and(|p| p.kind() == "source_file");
 
                 if is_top_level {
                     if let Some(func) = self.extract_function_details(node, content, file_path) {

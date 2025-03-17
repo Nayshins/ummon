@@ -12,6 +12,17 @@ pub mod javascript;
 pub mod python;
 pub mod rust;
 
+/// List of supported source file extensions.
+pub const SUPPORTED_EXTENSIONS: &[&str] = &["rs", "py", "js", "java"];
+
+/// Checks if the given path is a supported source file based on its extension.
+pub fn is_supported_source_file(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| SUPPORTED_EXTENSIONS.contains(&ext))
+        .unwrap_or(false)
+}
+
 // Legacy structures maintained for backward compatibility
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FunctionDefinition {

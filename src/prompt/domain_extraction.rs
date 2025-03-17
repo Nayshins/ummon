@@ -1,10 +1,12 @@
 use anyhow::Result;
-use indoc::indoc;
+use std::collections::HashMap;
 use std::env;
 use std::str::FromStr;
 
-use crate::parser::domain_model::{AttributeType, DomainEntity, DomainModelBuilder, EntityType};
-use crate::prompt::llm_integration::{LlmConfig, LlmProvider};
+use crate::parser::domain_model::{
+    AttributeType, DomainEntity, DomainModelBuilder, EntityType, RelationType, Relationship,
+};
+use crate::prompt::llm_integration::{query_llm, LlmConfig, LlmProvider};
 
 /// Domain model builder that uses an LLM to extract domain entities
 pub struct LlmModelExtractor {
@@ -39,15 +41,11 @@ impl LlmModelExtractor {
             LlmProvider::Anthropic => env::var("ANTHROPIC_API_KEY").ok(),
             LlmProvider::GoogleVertexAI => env::var("GOOGLE_API_KEY").ok(),
             LlmProvider::Ollama => Some(String::new()), // Ollama doesn't need an API key
-            LlmProvider::Mock => Some(String::new()),
         };
 
         // Set the API key if found
         if let Some(key) = api_key {
-            if !key.is_empty()
-                || config.provider == LlmProvider::Ollama
-                || config.provider == LlmProvider::Mock
-            {
+            if !key.is_empty() || config.provider == LlmProvider::Ollama {
                 tracing::info!(
                     "Found API key for {:?}, LLM domain extraction enabled",
                     config.provider
@@ -56,7 +54,7 @@ impl LlmModelExtractor {
             }
         } else {
             tracing::warn!(
-                "{:?} API key not set, using mock domain entities",
+                "{:?} API key not set, LLM domain extraction disabled",
                 config.provider
             );
         }
@@ -81,175 +79,173 @@ impl LlmModelExtractor {
     }
 }
 
+fn chunk_file(content: &str, chunk_size: usize, overlap: usize) -> Vec<String> {
+    if content.is_empty() || chunk_size == 0 {
+        return vec![];
+    }
+
+    let mut chunks = Vec::new();
+    let mut start = 0;
+
+    while start < content.len() {
+        let end = (start + chunk_size).min(content.len());
+        chunks.push(content[start..end].to_string());
+
+        if end == content.len() {
+            break;
+        }
+
+        start = end - overlap;
+    }
+
+    chunks
+}
+
+fn deduplicate_entities(entities: Vec<DomainEntity>) -> Vec<DomainEntity> {
+    let mut unique_entities = HashMap::new();
+
+    for entity in entities {
+        unique_entities
+            .entry(entity.name.clone())
+            .or_insert_with(|| entity);
+    }
+
+    unique_entities.into_values().collect()
+}
+
+async fn process_llm_prompt(prompt: &str, config: &LlmConfig) -> Result<Vec<DomainEntity>> {
+    let llm_response = query_llm(prompt, config).await?;
+
+    let entities_json = serde_json::from_str::<Vec<serde_json::Value>>(&llm_response)
+        .map_err(|e| anyhow::anyhow!("Failed to parse LLM response as JSON: {}", e))?;
+
+    let domain_entities = entities_json
+        .into_iter()
+        .filter_map(parse_entity_from_json)
+        .collect::<Vec<_>>();
+
+    if domain_entities.is_empty() {
+        return Err(anyhow::anyhow!(
+            "No valid domain entities found in LLM response"
+        ));
+    }
+
+    Ok(domain_entities)
+}
+
 impl DomainModelBuilder for LlmModelExtractor {
     async fn extract_domain_model<'a>(
         &'a self,
         content: &'a str,
         file_path: &'a str,
     ) -> Result<Vec<DomainEntity>> {
-        // Check if api key is set (for providers that need it)
-        let needs_api_key = !matches!(
-            self.config.provider,
-            LlmProvider::Ollama | LlmProvider::Mock
-        );
+        let needs_api_key = !matches!(self.config.provider, LlmProvider::Ollama);
 
         if needs_api_key && self.config.api_key.is_empty() {
-            tracing::info!(
-                "Using mock domain entity (API key not set) for {}",
-                file_path
-            );
-
-            // Return a mock domain entity when no API key is provided
-            return Ok(vec![DomainEntity {
-                name: format!(
-                    "MockEntity_{}",
-                    file_path.split('/').last().unwrap_or("unknown")
-                ),
-                entity_type: EntityType::Class,
-                attributes: [
-                    ("id".to_string(), AttributeType::String),
-                    ("name".to_string(), AttributeType::String),
-                ]
-                .into_iter()
-                .collect(),
-                relationships: vec![],
-                description: Some(
-                    "This is a mock domain entity because no API key was provided".to_string(),
-                ),
-            }]);
+            return Err(anyhow::anyhow!(
+                "API key not set for provider: {:?}",
+                self.config.provider
+            ));
         }
 
-        // Truncate content if it's too long (limit to ~10k chars to avoid token limits)
-        let truncated_content = if content.len() > 10000 {
-            tracing::info!("Content too large, truncating for LLM analysis");
-            // Take the first 8k and last 2k characters to capture more of the important structure
-            // Usually class/type definitions are at the beginning of files
-            let first_size = 8000.min(content.len());
-            let first = &content[..first_size];
+        let chunk_size = 10000;
+        let overlap = 500;
 
-            if content.len() > first_size {
-                let remaining = content.len() - first_size;
-                let last_size = 2000.min(remaining);
-                let last = &content[content.len() - last_size..];
-                format!("{}\n\n... [content truncated] ...\n\n{}", first, last)
-            } else {
-                first.to_string()
-            }
-        } else {
-            content.to_string()
-        };
+        if content.len() > chunk_size {
+            let chunks = chunk_file(content, chunk_size, overlap);
+            let mut all_entities = Vec::new();
 
-        // Create a prompt for the LLM
-        let prompt = build_domain_extraction_prompt(&truncated_content, file_path);
+            for (i, chunk) in chunks.iter().enumerate() {
+                tracing::info!(
+                    "Processing chunk {}/{} for {}",
+                    i + 1,
+                    chunks.len(),
+                    file_path
+                );
+                let prompt = build_domain_extraction_prompt(chunk, file_path);
 
-        tracing::info!(
-            "Sending request to {:?} for domain extraction...",
-            self.config.provider
-        );
-
-        // Directly use await since we're in an async function now
-        match crate::prompt::llm_integration::query_llm(&prompt, &self.config).await {
-            Ok(response) => {
-                // Try to parse the LLM response as JSON array of domain entities
-                match serde_json::from_str::<Vec<serde_json::Value>>(&response) {
-                    Ok(entities_json) => {
-                        // Parse each entity in the JSON array
-                        let mut domain_entities = Vec::new();
-
-                        for entity_json in entities_json {
-                            if let Some(entity) = parse_entity_from_json(entity_json) {
-                                domain_entities.push(entity);
-                            }
-                        }
-
-                        if domain_entities.is_empty() {
-                            tracing::warn!("No valid entities parsed from LLM response");
-                            create_mock_entity(file_path)
-                        } else {
-                            Ok(domain_entities)
-                        }
-                    }
-                    Err(e) => {
-                        tracing::error!("Error parsing LLM response as JSON: {}", e);
-                        create_mock_entity(file_path)
-                    }
+                match process_llm_prompt(&prompt, &self.config).await {
+                    Ok(entities) => all_entities.extend(entities),
+                    Err(e) => tracing::warn!("Failed to process chunk {}: {}", i + 1, e),
                 }
             }
-            Err(e) => {
-                tracing::error!("Error calling LLM API: {}", e);
-                create_mock_entity(file_path)
+
+            if all_entities.is_empty() {
+                return Err(anyhow::anyhow!("No entities extracted from file chunks"));
             }
+
+            Ok(deduplicate_entities(all_entities))
+        } else {
+            let prompt = build_domain_extraction_prompt(content, file_path);
+            process_llm_prompt(&prompt, &self.config).await
         }
     }
-}
-
-fn create_mock_entity(file_path: &str) -> Result<Vec<DomainEntity>> {
-    tracing::info!("Using mock domain entity for {}", file_path);
-    let file_name = file_path.split('/').last().unwrap_or("unknown");
-
-    // Generate domain entity based on the file name
-    let entity_type = if file_name.contains("entity") || file_name.contains("model") {
-        EntityType::Class
-    } else if file_name.contains("struct") {
-        EntityType::Struct
-    } else if file_name.contains("enum") {
-        EntityType::Enum
-    } else {
-        EntityType::Class
-    };
-
-    // Return a more detailed mock entity based on the file name
-    Ok(vec![DomainEntity {
-        name: format!("{}Model", file_name.split('.').next().unwrap_or("Domain")),
-        entity_type,
-        attributes: [
-            ("id".to_string(), AttributeType::String),
-            ("name".to_string(), AttributeType::String),
-            ("created_at".to_string(), AttributeType::String),
-        ]
-        .into_iter()
-        .collect(),
-        relationships: vec![],
-        description: Some(format!("Domain model extracted from {}", file_path)),
-    }])
 }
 
 fn parse_entity_from_json(json: serde_json::Value) -> Option<DomainEntity> {
     let name = json["name"].as_str()?.to_string();
 
-    // Parse entity type
-    let entity_type_str = json["entity_type"].as_str()?;
-    let entity_type = match entity_type_str {
-        "Class" => EntityType::Class,
-        "Struct" => EntityType::Struct,
-        "Enum" => EntityType::Enum,
-        "Interface" => EntityType::Interface,
-        _ => EntityType::Class, // Default to Class
-    };
+    let entity_type =
+        json["entity_type"]
+            .as_str()
+            .map(|entity_type_str| match entity_type_str {
+                "Class" => EntityType::Class,
+                "Struct" => EntityType::Struct,
+                "Enum" => EntityType::Enum,
+                "Interface" => EntityType::Interface,
+                _ => EntityType::Class,
+            })?;
 
-    // Parse description
     let description = json["description"].as_str().map(|s| s.to_string());
 
-    // Parse attributes
-    let mut attributes = std::collections::HashMap::new();
-    if let Some(attrs_obj) = json["attributes"].as_object() {
-        for (attr_name, attr_type_value) in attrs_obj {
-            if let Some(attr_type_str) = attr_type_value.as_str() {
-                let attr_type = match attr_type_str {
-                    "String" | "string" => AttributeType::String,
-                    "Number" | "number" | "int" | "integer" | "float" => AttributeType::Number,
-                    "Boolean" | "boolean" | "bool" => AttributeType::Boolean,
-                    // Date types are converted to custom string types
-                    "Date" | "date" => AttributeType::Custom("Date".to_string()),
-                    _ => AttributeType::Custom(attr_type_str.to_string()),
-                };
-                attributes.insert(attr_name.clone(), attr_type);
-            }
-        }
-    }
+    let attributes =
+        json["attributes"]
+            .as_object()
+            .map_or_else(std::collections::HashMap::new, |attrs_obj| {
+                attrs_obj
+                    .iter()
+                    .filter_map(|(attr_name, attr_type_value)| {
+                        attr_type_value.as_str().map(|attr_type_str| {
+                            let attr_type = match attr_type_str {
+                                "String" | "string" => AttributeType::String,
+                                "Number" | "number" | "int" | "integer" | "float" => {
+                                    AttributeType::Number
+                                }
+                                "Boolean" | "boolean" | "bool" => AttributeType::Boolean,
+                                "Date" | "date" => AttributeType::Custom("Date".to_string()),
+                                _ => AttributeType::Custom(attr_type_str.to_string()),
+                            };
+                            (attr_name.clone(), attr_type)
+                        })
+                    })
+                    .collect()
+            });
 
-    // Parse relationships (simplified for now)
-    let relationships = vec![];
+    let relationships = json["relationships"]
+        .as_array()
+        .map_or_else(Vec::new, |rels_array| {
+            rels_array
+                .iter()
+                .filter_map(|rel| {
+                    let target_entity = rel["target_entity"].as_str()?;
+                    let relation_type = rel["relation_type"].as_str().map_or(
+                        RelationType::References,
+                        |rel_type_str| match rel_type_str {
+                            "Inherits" => RelationType::Inherits,
+                            "Contains" => RelationType::Contains,
+                            "References" => RelationType::References,
+                            "Implements" => RelationType::Implements,
+                            _ => RelationType::References,
+                        },
+                    );
+
+                    Some(Relationship {
+                        target_entity: target_entity.to_string(),
+                        relation_type,
+                    })
+                })
+                .collect()
+        });
 
     Some(DomainEntity {
         name,
@@ -262,97 +258,144 @@ fn parse_entity_from_json(json: serde_json::Value) -> Option<DomainEntity> {
 
 /// Build a prompt for domain entity extraction
 fn build_domain_extraction_prompt(content: &str, file_path: &str) -> String {
-    format!(
-        indoc! {r#"
-            You are an expert software engineer specializing in domain modeling and code comprehension. 
-            Analyze the following code and extract domain entities (concepts) from it.
+    indoc::formatdoc! {r#"
+        Analyze the code from file '{}' and extract business domain entities, their attributes, associated functions, and relationships.
 
-            File: {}
+        CODE:
+        {}
 
-            ```
-            {}
-            ```
+        Return a JSON array where each item has:
+        - "name": Entity name (e.g., "Customer")
+        - "entity_type": Entity type (e.g., "Class", "Struct")
+        - "attributes": Object mapping attribute names to types (e.g., {{"id": "String", "name": "String"}})
+        - "functions": List of [{{"name": "processOrder", "purpose": "Processes an order"}}]
+        - "relationships": List of [{{"target_entity": "Order", "relation_type": "Contains"}}]
+        - "description": Description of the entity's purpose and role
 
-            Identify all entities (classes, interfaces, data structures, functions) that represent important concepts in this codebase.
-            Don't limit yourself to just business concepts - extract technical concepts as well.
-            For each entity:
-            1. Provide a name
-            2. Classify its type (Class, Struct, Enum, Interface)
-            3. List attributes with their types
-            4. Describe relationships to other entities
-            5. Add a brief description of the entity's purpose and role in the system
+        Focus on identifying business domain entities that represent real-world concepts.
 
-            Look for:
-            - Data structures that represent domain entities
-            - Key abstractions that organize functionality
-            - Core concepts mentioned in comments or function names
-            - Important technical patterns or architectural components
+        For example, given this Python code:
 
-            Format your response as a JSON array containing entity objects with these fields:
-            - name: string
-            - entity_type: "Class" | "Struct" | "Enum" | "Interface"
-            - description: string
-            - attributes: object mapping attribute names to types
-            - relationships: array of objects with {{target_entity: string, relation_type: "Inherits"|"Contains"|"References"|"Implements"}}
+        ```python
+        class Customer:
+            def __init__(self, id, name, email):
+                self.id = id
+                self.name = name
+                self.email = email
+            
+            def place_order(self, items):
+                return Order(self.id, items)
+        
+        class Order:
+            def __init__(self, customer_id, items):
+                self.id = generate_id()
+                self.customer_id = customer_id
+                self.items = items
+                self.total = calculate_total(items)
+        ```
 
-            Only provide the JSON with no other text.
-        "#},
-        file_path, content
-    )
+        The expected output would be:
+
+        [
+            {{
+                "name": "Customer",
+                "entity_type": "Class",
+                "attributes": {{"id": "String", "name": "String", "email": "String"}},
+                "functions": [{{"name": "place_order", "purpose": "Creates an order for the customer"}}],
+                "relationships": [{{"target_entity": "Order", "relation_type": "Contains"}}],
+                "description": "Represents a customer who can place orders"
+            }},
+            {{
+                "name": "Order",
+                "entity_type": "Class",
+                "attributes": {{"id": "String", "customer_id": "String", "items": "Array", "total": "Number"}},
+                "functions": [],
+                "relationships": [{{"target_entity": "Customer", "relation_type": "References"}}],
+                "description": "Represents an order placed by a customer"
+            }}
+        ]
+
+        Only provide the JSON array with no other text.
+    "#,
+    file_path, content
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    // Unit tests for helper functions
     #[test]
-    fn test_llm_model_extractor_new() {
-        // Test with no environment variables
-        std::env::remove_var("LLM_PROVIDER");
-        std::env::remove_var("LLM_MODEL");
-        std::env::remove_var("OPENROUTER_API_KEY");
-        std::env::remove_var("OPENAI_API_KEY");
-        std::env::remove_var("ANTHROPIC_API_KEY");
+    fn test_chunk_file() {
+        // Test with a content of length 20, chunk size 10, and overlap 2
+        let content = "12345678901234567890";
 
-        let extractor = LlmModelExtractor::new();
-        assert_eq!(extractor.config.provider, LlmProvider::OpenRouter);
-        assert_eq!(extractor.config.api_key, "");
-        assert_eq!(
-            extractor.config.model,
-            "anthropic/claude-3-5-haiku-20241022"
-        );
+        // Manually calculate expected chunks:
+        // 1st chunk: indices 0-10  => "1234567890"
+        // 2nd chunk: indices 8-18  => "9012345678"
+        // 3rd chunk: indices 16-20 => "7890"
+        let chunks = chunk_file(content, 10, 2);
 
-        // Test with environment variables
-        std::env::set_var("LLM_PROVIDER", "anthropic");
-        std::env::set_var("LLM_MODEL", "claude-instant-1.2");
-        std::env::set_var("ANTHROPIC_API_KEY", "test_key");
+        assert_eq!(chunks.len(), 3);
+        assert_eq!(chunks[0], "1234567890");
+        assert_eq!(chunks[1], "9012345678");
+        assert_eq!(chunks[2], "7890");
 
-        let extractor = LlmModelExtractor::new();
-        assert_eq!(extractor.config.provider, LlmProvider::Anthropic);
-        assert_eq!(extractor.config.api_key, "test_key");
-        assert_eq!(extractor.config.model, "claude-instant-1.2");
+        // Test with empty content
+        let empty_chunks = chunk_file("", 10, 2);
+        assert_eq!(empty_chunks.len(), 0);
 
-        // Cleanup
-        std::env::remove_var("LLM_PROVIDER");
-        std::env::remove_var("LLM_MODEL");
-        std::env::remove_var("ANTHROPIC_API_KEY");
+        // Test with chunk size larger than content
+        let large_chunk = chunk_file("12345", 10, 2);
+        assert_eq!(large_chunk.len(), 1);
+        assert_eq!(large_chunk[0], "12345");
     }
 
-    #[tokio::test]
-    async fn test_extract_domain_model() {
-        let mut extractor = LlmModelExtractor::new();
-        // Configure a mock provider to avoid real API calls
-        extractor.config.provider = LlmProvider::Mock;
+    #[test]
+    fn test_deduplicate_entities() {
+        let mut entities = Vec::new();
 
-        let content =
-            "class TestEntity { constructor(id, name) { this.id = id; this.name = name; } }";
-        let file_path = "/test/entity.js";
+        let entity1 = DomainEntity {
+            name: "Customer".to_string(),
+            entity_type: EntityType::Class,
+            attributes: [("id".to_string(), AttributeType::String)]
+                .into_iter()
+                .collect(),
+            relationships: vec![],
+            description: None,
+        };
 
-        let result = extractor.extract_domain_model(content, file_path).await;
-        assert!(result.is_ok());
+        let entity2 = DomainEntity {
+            name: "Customer".to_string(), // Same name as entity1
+            entity_type: EntityType::Class,
+            attributes: [("name".to_string(), AttributeType::String)]
+                .into_iter()
+                .collect(),
+            relationships: vec![],
+            description: Some("Duplicate".to_string()),
+        };
 
-        let entities = result.unwrap();
-        assert!(!entities.is_empty());
+        let entity3 = DomainEntity {
+            name: "Order".to_string(),
+            entity_type: EntityType::Class,
+            attributes: [("id".to_string(), AttributeType::String)]
+                .into_iter()
+                .collect(),
+            relationships: vec![],
+            description: None,
+        };
+
+        entities.push(entity1);
+        entities.push(entity2);
+        entities.push(entity3);
+
+        let result = deduplicate_entities(entities);
+        assert_eq!(result.len(), 2);
+
+        let names: Vec<String> = result.iter().map(|e| e.name.clone()).collect();
+        assert!(names.contains(&"Customer".to_string()));
+        assert!(names.contains(&"Order".to_string()));
     }
 
     #[test]
@@ -361,8 +404,8 @@ mod tests {
         let file_path = "/test/file.js";
         let prompt = build_domain_extraction_prompt(content, file_path);
 
-        assert!(prompt.contains("File: /test/file.js"));
+        assert!(prompt.contains("code from file '/test/file.js'"));
         assert!(prompt.contains("function test() { return true; }"));
-        assert!(prompt.contains("Format your response as a JSON array"));
+        assert!(prompt.contains("Only provide the JSON array"));
     }
 }

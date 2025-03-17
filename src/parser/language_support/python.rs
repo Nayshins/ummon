@@ -1,5 +1,4 @@
 use super::*;
-use indoc::indoc;
 use tree_sitter::{Node, Parser};
 
 pub struct PythonParser {
@@ -598,10 +597,7 @@ impl PythonParser {
 
 impl LanguageParser for PythonParser {
     fn can_handle(&self, file_path: &Path) -> bool {
-        file_path
-            .extension()
-            .and_then(|ext| ext.to_str())
-            .map_or(false, |ext| ext == "py")
+        file_path.extension().and_then(|ext| ext.to_str()) == Some("py")
     }
 
     fn parse_types(&mut self, content: &str, file_path: &str) -> Result<Vec<TypeDefinition>> {
@@ -863,6 +859,7 @@ impl LanguageParser for PythonParser {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use indoc::indoc;
 
     #[test]
     fn test_python_function_parameter_extraction() {
