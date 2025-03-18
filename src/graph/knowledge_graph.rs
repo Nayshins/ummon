@@ -83,7 +83,6 @@ impl KnowledgeGraph {
         let id = entity.id().clone();
         let entity_type = entity.entity_type();
 
-        // Use downcasting to preserve the full entity data
         let storage = match entity_type {
             EntityType::Function | EntityType::Method => {
                 if let Some(func) = (&*entity).as_any().downcast_ref::<FunctionEntity>() {
@@ -152,7 +151,6 @@ impl KnowledgeGraph {
             }
         };
 
-        // Get entity metadata for search indexing
         let entity_name = entity.name().to_lowercase();
         let entity_path = entity.path().map(|p| p.to_lowercase());
         let entity_type_str = entity.entity_type().to_string().to_lowercase();
@@ -163,7 +161,6 @@ impl KnowledgeGraph {
             .map(|(_key, v)| v.to_lowercase())
             .collect();
 
-        // Store the entity and update search indices
         self.entities.insert(id.clone(), Box::new(storage));
 
         self.search_index
@@ -555,7 +552,6 @@ mod tests {
     fn test_add_boxed_entity_preserves_function_data() {
         let mut kg = KnowledgeGraph::new();
 
-        // Create a function entity with specific parameters and return type
         let id = EntityId::new("test::function_with_params");
         let base = BaseEntity::new(
             id.clone(),
@@ -587,22 +583,17 @@ mod tests {
             is_abstract: false,
         };
 
-        // Convert to Box<dyn Entity>
         let boxed_entity: Box<dyn Entity> = Box::new(function);
 
-        // Add it to the graph
         let result = kg.add_boxed_entity(boxed_entity);
         assert!(result.is_ok());
 
-        // Retrieve it
         let entity = kg.get_entity(&id);
         assert!(entity.is_some());
 
-        // Get the concrete FunctionEntity through EntityStorage
         let storage = kg.entities.get(&id).unwrap();
         match &**storage {
             EntityStorage::Function(func) => {
-                // Verify all the specific fields were preserved
                 assert_eq!(func.parameters.len(), 2);
                 assert_eq!(func.parameters[0].name, "arg1");
                 assert_eq!(
@@ -624,7 +615,6 @@ mod tests {
     fn test_add_boxed_entity_preserves_type_data() {
         let mut kg = KnowledgeGraph::new();
 
-        // Create a type entity with specific fields, methods, and supertypes
         let id = EntityId::new("test::Class");
         let base = BaseEntity::new(
             id.clone(),
@@ -646,22 +636,17 @@ mod tests {
             is_abstract: true,
         };
 
-        // Convert to Box<dyn Entity>
         let boxed_entity: Box<dyn Entity> = Box::new(type_entity);
 
-        // Add it to the graph
         let result = kg.add_boxed_entity(boxed_entity);
         assert!(result.is_ok());
 
-        // Retrieve it
         let entity = kg.get_entity(&id);
         assert!(entity.is_some());
 
-        // Get the concrete TypeEntity through EntityStorage
         let storage = kg.entities.get(&id).unwrap();
         match &**storage {
             EntityStorage::Type(typ) => {
-                // Verify all the specific fields were preserved
                 assert_eq!(typ.fields.len(), 1);
                 assert_eq!(typ.fields[0].as_str(), field_id.as_str());
 
@@ -682,7 +667,6 @@ mod tests {
     fn test_add_boxed_entity_wrong_type_fails() {
         let mut kg = KnowledgeGraph::new();
 
-        // Create an entity with a type that doesn't match its implementation
         let id = EntityId::new("test::mismatch");
         let base = BaseEntity::new(
             id.clone(),
@@ -692,14 +676,11 @@ mod tests {
             Some("test.rs".to_string()),
         );
 
-        // Use a BaseEntity instead of a FunctionEntity
         let entity: Box<dyn Entity> = Box::new(base);
 
-        // This should fail because the entity_type (Function) doesn't match the actual type (BaseEntity)
         let result = kg.add_boxed_entity(entity);
         assert!(result.is_err());
 
-        // Verify the error message is helpful
         let err = result.unwrap_err();
         let err_msg = err.to_string();
         assert!(err_msg.contains("Expected FunctionEntity but downcast failed"));
