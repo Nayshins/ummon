@@ -104,7 +104,4 @@ pub enum Commands {
         #[arg(long)]
         llm_model: Option<String>,
     },
-
-    /// Start an MCP server for AI agent interaction with stdin/stdout transport
-    Serve,
 }
