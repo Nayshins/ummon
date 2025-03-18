@@ -38,19 +38,12 @@ r2d2 = "0.8"
 r2d2_sqlite = "0.22"
 log = "0.4"
 env_logger = "0.10"
-# MCP Server dependencies
-axum = { version = "0.6", optional = true }
-tower = { version = "0.4", optional = true }
-tower-http = { version = "0.4", features = ["cors", "trace"], optional = true }
-async-trait = "0.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-regex = "1.8"
 chrono = { version = "0.4", features = ["serde"] }
-thiserror = "1.0"
-futures = "0.3"
 pest = "2.7"
 pest_derive = "2.7"
+regex = "1.8"
 
 [dev-dependencies]
 criterion = "0.5"
@@ -58,4 +51,3 @@ tempfile = "3.8"
 
 [features]
 default = []
-http = ["axum", "tower", "tower-http"]
