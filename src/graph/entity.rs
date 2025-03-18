@@ -133,7 +133,7 @@ pub trait Entity {
     fn serialize_data(&self) -> anyhow::Result<String> {
         Ok("{}".to_string())
     }
-    
+
     /// Returns a reference to Any for downcasting to concrete types
     fn as_any(&self) -> &dyn std::any::Any;
 }
@@ -199,7 +199,7 @@ impl Entity for BaseEntity {
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.metadata
     }
-    
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -278,7 +278,7 @@ impl Entity for FunctionEntity {
         };
         serde_json::to_string(&data).map_err(Into::into)
     }
-    
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -349,7 +349,7 @@ impl Entity for TypeEntity {
         };
         serde_json::to_string(&data).map_err(Into::into)
     }
-    
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -412,7 +412,7 @@ impl Entity for ModuleEntity {
         };
         serde_json::to_string(&data).map_err(Into::into)
     }
-    
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -479,7 +479,7 @@ impl Entity for VariableEntity {
         };
         serde_json::to_string(&data).map_err(Into::into)
     }
-    
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -546,7 +546,7 @@ impl Entity for DomainConceptEntity {
         };
         serde_json::to_string(&data).map_err(Into::into)
     }
-    
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

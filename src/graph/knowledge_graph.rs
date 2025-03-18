@@ -509,7 +509,8 @@ impl KnowledgeGraph {
 mod tests {
     use super::*;
     use crate::graph::entity::{
-        BaseEntity, DomainConceptEntity, EntityId, EntityType, FunctionEntity, Parameter, Visibility,
+        BaseEntity, DomainConceptEntity, EntityId, EntityType, FunctionEntity, Parameter,
+        Visibility,
     };
     use crate::graph::relationship::{Relationship, RelationshipType};
 
@@ -549,7 +550,7 @@ mod tests {
         assert!(matches!(entity.entity_type(), EntityType::Function));
         assert_eq!(entity.file_path().unwrap(), "test.rs");
     }
-    
+
     #[test]
     fn test_add_boxed_entity_preserves_function_data() {
         let mut kg = KnowledgeGraph::new();
@@ -568,7 +569,7 @@ mod tests {
             type_annotation: Some("String".to_string()),
             default_value: None,
         };
-        
+
         let param2 = Parameter {
             name: "arg2".to_string(),
             type_annotation: Some("i32".to_string()),
@@ -588,15 +589,15 @@ mod tests {
 
         // Convert to Box<dyn Entity>
         let boxed_entity: Box<dyn Entity> = Box::new(function);
-        
+
         // Add it to the graph
         let result = kg.add_boxed_entity(boxed_entity);
         assert!(result.is_ok());
-        
+
         // Retrieve it
         let entity = kg.get_entity(&id);
         assert!(entity.is_some());
-        
+
         // Get the concrete FunctionEntity through EntityStorage
         let storage = kg.entities.get(&id).unwrap();
         match &**storage {
@@ -604,7 +605,10 @@ mod tests {
                 // Verify all the specific fields were preserved
                 assert_eq!(func.parameters.len(), 2);
                 assert_eq!(func.parameters[0].name, "arg1");
-                assert_eq!(func.parameters[0].type_annotation, Some("String".to_string()));
+                assert_eq!(
+                    func.parameters[0].type_annotation,
+                    Some("String".to_string())
+                );
                 assert_eq!(func.parameters[1].name, "arg2");
                 assert_eq!(func.parameters[1].type_annotation, Some("i32".to_string()));
                 assert_eq!(func.parameters[1].default_value, Some("42".to_string()));
@@ -644,15 +648,15 @@ mod tests {
 
         // Convert to Box<dyn Entity>
         let boxed_entity: Box<dyn Entity> = Box::new(type_entity);
-        
+
         // Add it to the graph
         let result = kg.add_boxed_entity(boxed_entity);
         assert!(result.is_ok());
-        
+
         // Retrieve it
         let entity = kg.get_entity(&id);
         assert!(entity.is_some());
-        
+
         // Get the concrete TypeEntity through EntityStorage
         let storage = kg.entities.get(&id).unwrap();
         match &**storage {
@@ -660,20 +664,20 @@ mod tests {
                 // Verify all the specific fields were preserved
                 assert_eq!(typ.fields.len(), 1);
                 assert_eq!(typ.fields[0].as_str(), field_id.as_str());
-                
+
                 assert_eq!(typ.methods.len(), 1);
                 assert_eq!(typ.methods[0].as_str(), method_id.as_str());
-                
+
                 assert_eq!(typ.supertypes.len(), 1);
                 assert_eq!(typ.supertypes[0].as_str(), supertype_id.as_str());
-                
+
                 assert!(matches!(typ.visibility, Visibility::Public));
                 assert!(typ.is_abstract);
             }
             _ => panic!("Expected TypeEntity but got a different entity type"),
         }
     }
-    
+
     #[test]
     fn test_add_boxed_entity_wrong_type_fails() {
         let mut kg = KnowledgeGraph::new();
@@ -687,14 +691,14 @@ mod tests {
             EntityType::Function,
             Some("test.rs".to_string()),
         );
-        
+
         // Use a BaseEntity instead of a FunctionEntity
         let entity: Box<dyn Entity> = Box::new(base);
-        
+
         // This should fail because the entity_type (Function) doesn't match the actual type (BaseEntity)
         let result = kg.add_boxed_entity(entity);
         assert!(result.is_err());
-        
+
         // Verify the error message is helpful
         let err = result.unwrap_err();
         let err_msg = err.to_string();
