@@ -133,6 +133,9 @@ pub trait Entity {
     fn serialize_data(&self) -> anyhow::Result<String> {
         Ok("{}".to_string())
     }
+
+    /// Returns a reference to Any for downcasting to concrete types
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 /// Common properties for all entity implementations
@@ -195,6 +198,10 @@ impl Entity for BaseEntity {
 
     fn metadata_mut(&mut self) -> &mut HashMap<String, String> {
         &mut self.metadata
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
@@ -271,6 +278,10 @@ impl Entity for FunctionEntity {
         };
         serde_json::to_string(&data).map_err(Into::into)
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 /// Class, struct, or interface definition
@@ -338,6 +349,10 @@ impl Entity for TypeEntity {
         };
         serde_json::to_string(&data).map_err(Into::into)
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 /// Module or file representation
@@ -396,6 +411,10 @@ impl Entity for ModuleEntity {
             imports: self.imports.clone(),
         };
         serde_json::to_string(&data).map_err(Into::into)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
@@ -460,6 +479,10 @@ impl Entity for VariableEntity {
         };
         serde_json::to_string(&data).map_err(Into::into)
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 /// Business domain concept
@@ -522,6 +545,10 @@ impl Entity for DomainConceptEntity {
             confidence: self.confidence,
         };
         serde_json::to_string(&data).map_err(Into::into)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
