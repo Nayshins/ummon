@@ -167,17 +167,6 @@ impl RelationshipStore {
         }
     }
 
-    /// Get all incoming relationships to an entity
-    pub fn get_incoming_relationships(&self, entity_id: &EntityId) -> Vec<&Relationship> {
-        match self.incoming_relationships.get(entity_id) {
-            Some(rel_ids) => rel_ids
-                .iter()
-                .filter_map(|id| self.relationships.get(id))
-                .collect(),
-            None => Vec::new(),
-        }
-    }
-
     /// Get all relationships
     pub fn get_all_relationships(&self) -> Vec<Relationship> {
         self.relationships.values().cloned().collect()
@@ -270,10 +259,6 @@ mod tests {
             outgoing2[0].relationship_type,
             RelationshipType::Imports
         ));
-
-        // Test incoming relationships
-        let incoming = store.get_incoming_relationships(&target);
-        assert_eq!(incoming.len(), 2);
 
         // Test non-existent relationships
         let nonexistent = store.get_outgoing_relationships(&EntityId::new("nonexistent"));
@@ -368,10 +353,8 @@ mod tests {
     fn test_relationship_store_empty() {
         let store = RelationshipStore::new();
 
-        // Test with empty store
         let id = EntityId::new("test");
         assert!(store.get_outgoing_relationships(&id).is_empty());
-        assert!(store.get_incoming_relationships(&id).is_empty());
     }
 
     #[test]

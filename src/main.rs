@@ -2,8 +2,6 @@ mod cli;
 mod commands;
 mod db;
 mod graph;
-mod mcp_core;
-mod mcp_server;
 mod parser;
 mod prompt;
 mod query;
@@ -72,7 +70,6 @@ async fn main() -> Result<()> {
             commands::assist::run(&instruction, llm_provider.as_deref(), llm_model.as_deref())
                 .await?
         }
-        cli::Commands::Serve => commands::serve::run().await?,
     }
 
     Ok(())

@@ -2,7 +2,6 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use indoc::indoc;
 use std::fs;
 use std::io::Write;
-use std::path::Path;
 use tempfile::tempdir;
 use ummon::parser::language_support::get_parser_for_file;
 
@@ -25,12 +24,12 @@ const RUST_SAMPLE: &str = indoc! {r#"
         pub fn new(x: f64, y: f64) -> Self {
             Self { x, y }
         }
-        
+
         /// Calculate distance from origin
         pub fn distance_from_origin(&self) -> f64 {
             (self.x * self.x + self.y * self.y).sqrt()
         }
-        
+
         /// Calculate distance between two points
         pub fn distance(&self, other: &Point) -> f64 {
             let dx = self.x - other.x;
@@ -56,16 +55,16 @@ const PYTHON_SAMPLE: &str = indoc! {r#"
 
     class Point:
         """A class to represent a point in 2D space"""
-        
+
         def __init__(self, x, y):
             """Initialize with x and y coordinates"""
             self.x = x
             self.y = y
-            
+
         def distance_from_origin(self):
             """Calculate distance from origin"""
             return (self.x**2 + self.y**2)**0.5
-            
+
         def distance(self, other):
             """Calculate distance between two points"""
             dx = self.x - other.x
@@ -75,7 +74,7 @@ const PYTHON_SAMPLE: &str = indoc! {r#"
     def sum_numbers(numbers):
         """Calculate the sum of a list of numbers"""
         return sum(numbers)
-        
+
     # Create some points
     p1 = Point(1.0, 2.0)
     p2 = Point(4.0, 6.0)
@@ -109,7 +108,7 @@ const JAVASCRIPT_SAMPLE: &str = indoc! {r#"
             this.x = x;
             this.y = y;
         }
-        
+
         /**
          * Calculate distance from origin
          * @returns {number} Distance from origin
@@ -117,7 +116,7 @@ const JAVASCRIPT_SAMPLE: &str = indoc! {r#"
         distanceFromOrigin() {
             return Math.sqrt(this.x**2 + this.y**2);
         }
-        
+
         /**
          * Calculate distance between two points
          * @param {Point} other - The other point
@@ -151,7 +150,7 @@ const JAVA_SAMPLE: &str = indoc! {r#"
     public class Point {
         private double x;
         private double y;
-        
+
         /**
          * Initialize with x and y coordinates
          * @param x X coordinate
@@ -161,7 +160,7 @@ const JAVA_SAMPLE: &str = indoc! {r#"
             this.x = x;
             this.y = y;
         }
-        
+
         /**
          * Get the X coordinate
          * @return X coordinate
@@ -169,7 +168,7 @@ const JAVA_SAMPLE: &str = indoc! {r#"
         public double getX() {
             return x;
         }
-        
+
         /**
          * Get the Y coordinate
          * @return Y coordinate
@@ -177,7 +176,7 @@ const JAVA_SAMPLE: &str = indoc! {r#"
         public double getY() {
             return y;
         }
-        
+
         /**
          * Calculate distance from origin
          * @return Distance from origin
@@ -185,7 +184,7 @@ const JAVA_SAMPLE: &str = indoc! {r#"
         public double distanceFromOrigin() {
             return Math.sqrt(x*x + y*y);
         }
-        
+
         /**
          * Calculate distance between two points
          * @param other The other point
@@ -196,7 +195,7 @@ const JAVA_SAMPLE: &str = indoc! {r#"
             double dy = this.y - other.y;
             return Math.sqrt(dx*dx + dy*dy);
         }
-        
+
         /**
          * Static method to add two numbers
          * @param a First number
@@ -206,7 +205,7 @@ const JAVA_SAMPLE: &str = indoc! {r#"
         public static int add(int a, int b) {
             return a + b;
         }
-        
+
         /**
          * Calculate the sum of an array of numbers
          * @param numbers Array of numbers

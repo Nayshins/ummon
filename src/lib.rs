@@ -1,8 +1,6 @@
 // Expose modules as public for use by other crates
 pub mod db;
 pub mod graph;
-pub mod mcp_core;
-pub mod mcp_server;
 pub mod parser;
 pub mod prompt;
 pub mod query;
