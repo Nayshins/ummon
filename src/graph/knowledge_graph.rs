@@ -82,28 +82,18 @@ impl KnowledgeGraph {
     pub fn add_boxed_entity(&mut self, entity: Box<dyn Entity>) -> Result<()> {
         let id = entity.id().clone();
         let entity_type = entity.entity_type();
-        let entity_name = entity.name().to_string();
-        let _entity_path = entity.path().map(|p| p.to_string());
-        let file_path = entity.file_path().map(|p| p.to_string());
-        let _metadata = entity.metadata().clone();
 
-        // Instead of trying to downcast the boxed entity directly, create a new entity of the appropriate type
+        // Use downcasting to preserve the full entity data
         let storage = match entity_type {
             EntityType::Function | EntityType::Method => {
-                let base = BaseEntity::new(id.clone(), entity_name, entity_type.clone(), file_path);
-
-                let function = FunctionEntity {
-                    base,
-                    parameters: vec![], // Default values, can be improved
-                    return_type: None,
-                    visibility: crate::graph::entity::Visibility::Public,
-                    is_async: false,
-                    is_static: false,
-                    is_constructor: false,
-                    is_abstract: false,
-                };
-
-                EntityStorage::Function(function)
+                if let Some(func) = (&*entity).as_any().downcast_ref::<FunctionEntity>() {
+                    EntityStorage::Function(func.clone())
+                } else {
+                    return Err(anyhow::anyhow!(
+                        "Expected FunctionEntity but downcast failed for ID: {}",
+                        id.as_str()
+                    ));
+                }
             }
             EntityType::Class
             | EntityType::Interface
@@ -111,68 +101,58 @@ impl KnowledgeGraph {
             | EntityType::Struct
             | EntityType::Enum
             | EntityType::Type => {
-                let base = BaseEntity::new(id.clone(), entity_name, entity_type.clone(), file_path);
-
-                let type_entity = TypeEntity {
-                    base,
-                    fields: vec![],
-                    methods: vec![],
-                    supertypes: vec![],
-                    visibility: crate::graph::entity::Visibility::Public,
-                    is_abstract: false,
-                };
-
-                EntityStorage::Type(type_entity)
+                if let Some(typ) = (&*entity).as_any().downcast_ref::<TypeEntity>() {
+                    EntityStorage::Type(typ.clone())
+                } else {
+                    return Err(anyhow::anyhow!(
+                        "Expected TypeEntity but downcast failed for ID: {}",
+                        id.as_str()
+                    ));
+                }
             }
             EntityType::Module | EntityType::File => {
-                let base = BaseEntity::new(
-                    id.clone(),
-                    entity_name,
-                    entity_type.clone(),
-                    file_path.clone(),
-                );
-
-                let module = ModuleEntity {
-                    base,
-                    path: file_path.unwrap_or_default(),
-                    children: vec![],
-                    imports: vec![],
-                };
-
-                EntityStorage::Module(module)
+                if let Some(module) = (&*entity).as_any().downcast_ref::<ModuleEntity>() {
+                    EntityStorage::Module(module.clone())
+                } else {
+                    return Err(anyhow::anyhow!(
+                        "Expected ModuleEntity but downcast failed for ID: {}",
+                        id.as_str()
+                    ));
+                }
             }
             EntityType::Variable | EntityType::Field | EntityType::Constant => {
-                let base = BaseEntity::new(id.clone(), entity_name, entity_type.clone(), file_path);
-
-                let variable = VariableEntity {
-                    base,
-                    type_annotation: None,
-                    visibility: crate::graph::entity::Visibility::Public,
-                    is_const: entity_type == EntityType::Constant,
-                    is_static: false,
-                };
-
-                EntityStorage::Variable(variable)
+                if let Some(var) = (&*entity).as_any().downcast_ref::<VariableEntity>() {
+                    EntityStorage::Variable(var.clone())
+                } else {
+                    return Err(anyhow::anyhow!(
+                        "Expected VariableEntity but downcast failed for ID: {}",
+                        id.as_str()
+                    ));
+                }
             }
             EntityType::DomainConcept => {
-                let base = BaseEntity::new(id.clone(), entity_name, entity_type.clone(), file_path);
-
-                let domain = DomainConceptEntity {
-                    base,
-                    attributes: vec![],
-                    description: None,
-                    confidence: 0.5,
-                };
-
-                EntityStorage::DomainConcept(domain)
+                if let Some(domain) = (&*entity).as_any().downcast_ref::<DomainConceptEntity>() {
+                    EntityStorage::DomainConcept(domain.clone())
+                } else {
+                    return Err(anyhow::anyhow!(
+                        "Expected DomainConceptEntity but downcast failed for ID: {}",
+                        id.as_str()
+                    ));
+                }
             }
             _ => {
-                let base = BaseEntity::new(id.clone(), entity_name, entity_type.clone(), file_path);
-
-                EntityStorage::Base(base)
+                if let Some(base) = (&*entity).as_any().downcast_ref::<BaseEntity>() {
+                    EntityStorage::Base(base.clone())
+                } else {
+                    return Err(anyhow::anyhow!(
+                        "Unknown entity type for ID: {}",
+                        id.as_str()
+                    ));
+                }
             }
         };
 
+        // Get entity metadata for search indexing
         let entity_name = entity.name().to_lowercase();
         let entity_path = entity.path().map(|p| p.to_lowercase());
         let entity_type_str = entity.entity_type().to_string().to_lowercase();
@@ -183,6 +163,7 @@ impl KnowledgeGraph {
             .map(|(_key, v)| v.to_lowercase())
             .collect();
 
+        // Store the entity and update search indices
         self.entities.insert(id.clone(), Box::new(storage));
 
         self.search_index
@@ -528,7 +509,7 @@ impl KnowledgeGraph {
 mod tests {
     use super::*;
     use crate::graph::entity::{
-        BaseEntity, DomainConceptEntity, EntityId, EntityType, FunctionEntity, Visibility,
+        BaseEntity, DomainConceptEntity, EntityId, EntityType, FunctionEntity, Parameter, Visibility,
     };
     use crate::graph::relationship::{Relationship, RelationshipType};
 
@@ -567,6 +548,157 @@ mod tests {
         assert_eq!(entity.name(), "testFunction");
         assert!(matches!(entity.entity_type(), EntityType::Function));
         assert_eq!(entity.file_path().unwrap(), "test.rs");
+    }
+    
+    #[test]
+    fn test_add_boxed_entity_preserves_function_data() {
+        let mut kg = KnowledgeGraph::new();
+
+        // Create a function entity with specific parameters and return type
+        let id = EntityId::new("test::function_with_params");
+        let base = BaseEntity::new(
+            id.clone(),
+            "testFunctionWithParams".to_string(),
+            EntityType::Function,
+            Some("test.rs".to_string()),
+        );
+
+        let param1 = Parameter {
+            name: "arg1".to_string(),
+            type_annotation: Some("String".to_string()),
+            default_value: None,
+        };
+        
+        let param2 = Parameter {
+            name: "arg2".to_string(),
+            type_annotation: Some("i32".to_string()),
+            default_value: Some("42".to_string()),
+        };
+
+        let function = FunctionEntity {
+            base,
+            parameters: vec![param1, param2],
+            return_type: Some("bool".to_string()),
+            visibility: Visibility::Public,
+            is_async: true,
+            is_static: false,
+            is_constructor: false,
+            is_abstract: false,
+        };
+
+        // Convert to Box<dyn Entity>
+        let boxed_entity: Box<dyn Entity> = Box::new(function);
+        
+        // Add it to the graph
+        let result = kg.add_boxed_entity(boxed_entity);
+        assert!(result.is_ok());
+        
+        // Retrieve it
+        let entity = kg.get_entity(&id);
+        assert!(entity.is_some());
+        
+        // Get the concrete FunctionEntity through EntityStorage
+        let storage = kg.entities.get(&id).unwrap();
+        match &**storage {
+            EntityStorage::Function(func) => {
+                // Verify all the specific fields were preserved
+                assert_eq!(func.parameters.len(), 2);
+                assert_eq!(func.parameters[0].name, "arg1");
+                assert_eq!(func.parameters[0].type_annotation, Some("String".to_string()));
+                assert_eq!(func.parameters[1].name, "arg2");
+                assert_eq!(func.parameters[1].type_annotation, Some("i32".to_string()));
+                assert_eq!(func.parameters[1].default_value, Some("42".to_string()));
+                assert_eq!(func.return_type, Some("bool".to_string()));
+                assert!(func.is_async);
+                assert!(!func.is_static);
+            }
+            _ => panic!("Expected FunctionEntity but got a different entity type"),
+        }
+    }
+
+    #[test]
+    fn test_add_boxed_entity_preserves_type_data() {
+        let mut kg = KnowledgeGraph::new();
+
+        // Create a type entity with specific fields, methods, and supertypes
+        let id = EntityId::new("test::Class");
+        let base = BaseEntity::new(
+            id.clone(),
+            "TestClass".to_string(),
+            EntityType::Class,
+            Some("test_class.rs".to_string()),
+        );
+
+        let field_id = EntityId::new("test::Class::field");
+        let method_id = EntityId::new("test::Class::method");
+        let supertype_id = EntityId::new("test::ParentClass");
+
+        let type_entity = TypeEntity {
+            base,
+            fields: vec![field_id.clone()],
+            methods: vec![method_id.clone()],
+            supertypes: vec![supertype_id.clone()],
+            visibility: Visibility::Public,
+            is_abstract: true,
+        };
+
+        // Convert to Box<dyn Entity>
+        let boxed_entity: Box<dyn Entity> = Box::new(type_entity);
+        
+        // Add it to the graph
+        let result = kg.add_boxed_entity(boxed_entity);
+        assert!(result.is_ok());
+        
+        // Retrieve it
+        let entity = kg.get_entity(&id);
+        assert!(entity.is_some());
+        
+        // Get the concrete TypeEntity through EntityStorage
+        let storage = kg.entities.get(&id).unwrap();
+        match &**storage {
+            EntityStorage::Type(typ) => {
+                // Verify all the specific fields were preserved
+                assert_eq!(typ.fields.len(), 1);
+                assert_eq!(typ.fields[0].as_str(), field_id.as_str());
+                
+                assert_eq!(typ.methods.len(), 1);
+                assert_eq!(typ.methods[0].as_str(), method_id.as_str());
+                
+                assert_eq!(typ.supertypes.len(), 1);
+                assert_eq!(typ.supertypes[0].as_str(), supertype_id.as_str());
+                
+                assert!(matches!(typ.visibility, Visibility::Public));
+                assert!(typ.is_abstract);
+            }
+            _ => panic!("Expected TypeEntity but got a different entity type"),
+        }
+    }
+    
+    #[test]
+    fn test_add_boxed_entity_wrong_type_fails() {
+        let mut kg = KnowledgeGraph::new();
+
+        // Create an entity with a type that doesn't match its implementation
+        let id = EntityId::new("test::mismatch");
+        let base = BaseEntity::new(
+            id.clone(),
+            "MismatchEntity".to_string(),
+            // Here's the mismatch - we're declaring it as a Function but using BaseEntity
+            EntityType::Function,
+            Some("test.rs".to_string()),
+        );
+        
+        // Use a BaseEntity instead of a FunctionEntity
+        let entity: Box<dyn Entity> = Box::new(base);
+        
+        // This should fail because the entity_type (Function) doesn't match the actual type (BaseEntity)
+        let result = kg.add_boxed_entity(entity);
+        assert!(result.is_err());
+        
+        // Verify the error message is helpful
+        let err = result.unwrap_err();
+        let err_msg = err.to_string();
+        assert!(err_msg.contains("Expected FunctionEntity but downcast failed"));
     }
 
     #[test]
