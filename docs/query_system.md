@@ -171,4 +171,3 @@ The query system consists of:
 
 For more information about Ummon, see:
 - [README.md](../README.md) - Project overview
-- [MCP Integration](mcp_integration.md) - For programmatic access

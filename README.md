@@ -40,12 +40,6 @@ Named after the AI Ummon from Dan Simmons' Hyperion Cantos, this project provide
    - Maps domain concepts to implementation details
    - Creates a bridge between technical and business understanding
 
-4. **AI Agent Integration with MCP**
-   - Provides Model Context Protocol (MCP) server for AI agent interaction
-   - Enables agents to explore code relationships and architecture
-   - Advanced visualization tools for navigating complex codebases
-   - Find relevant files for specific tasks or features
-
 ## Installation and Setup
 
 ```
@@ -92,29 +86,6 @@ ummon query "select functions where file_path like 'src/auth/%'" --no-llm
 
 # Generate AI-assisted recommendations
 ummon assist "implement a user registration function"
-
-# Start an MCP server (Model Context Protocol) for AI agent interaction
-ummon serve                      # MCP server uses stdin/stdout for communication
-```
-
-## MCP Server
-
-Ummon includes a Model Context Protocol (MCP) server that allows AI agents to interact with codebase knowledge graphs. The server provides these capabilities:
-
-### Available Tools:
-
-- `search_code`: Search for code entities using a natural language query
-- `get_entity`: Get detailed information about a specific entity
-- `debug_graph`: Get information about the knowledge graph structure
-
-### Example MCP Usage:
-
-```bash
-# Start MCP server with stdin/stdout transport (works with MCP Inspector)
-ummon serve
-
-# Connect to the server using MCP Inspector
-npx @modelcontextprotocol/inspector ummon serve
 ```
 
 ## Configuration
@@ -132,7 +103,6 @@ Ummon is built with a modular architecture:
 - Graph-based storage for entities and relationships
 - LLM integration for semantic understanding
 - Command-line interface for user interaction
-- MCP server for AI agent integration
 
 ### Language Support
 
@@ -175,33 +145,12 @@ cargo test <test_name>     # Run specific test
 cargo fmt
 ```
 
-### Testing the MCP Server
-
-We provide multiple test clients for the MCP server:
-
-```bash
-# Using the full test client (spawns its own server)
-node test/javascript/mcp_client.js
-
-# Using the stdin client with an existing server
-cargo run -- serve | node test/javascript/stdin_client.js
-```
-
-The test clients verify:
-- Server initialization and capabilities detection
-- Tool listing and execution
-- Error handling with invalid methods and parameters
-- Entity search and relationship exploration
-- Resource management
-
 ### Test Resources
 
 - `test/java/`: Java test files for parser testing
   - `Test.java`: Simple Java class for basic parsing
   - `ComplexExample.java`: Advanced Java features (generics, annotations, etc.)
-- `test/javascript/`: JavaScript test clients
-  - `mcp_client.js`: Full-featured test client that spawns a server
-  - `stdin_client.js`: Simple client for piped testing
+- `test/javascript/`: JavaScript test files for testing
 
 ## License
 
