@@ -62,32 +62,39 @@ impl<'a> QueryExecutor<'a> {
                 TraversalDirection::Inbound => "inbound",
                 TraversalDirection::Both => "both",
             };
-            
+
             let paths = self.db.execute_traversal(
                 entity.id(),
                 Some(&query.relationship.relationship_type),
                 direction,
-                query.max_depth
+                query.max_depth,
             )?;
-            
+
             if !paths.is_empty() {
                 // Add all paths to our result
                 all_paths.extend(paths);
             }
         }
-        
+
         // Format the traversal results
         let formatter = ResultFormatter::new(&OutputFormat::Text);
         formatter.format_paths(&all_paths)
     }
 
     /// Convert ConditionNode tree to flat SQL-compatible conditions
-    fn build_conditions(&self, condition: &Option<ConditionNode>) -> Vec<(&'static str, &'static str)> {
+    fn build_conditions(
+        &self,
+        condition: &Option<ConditionNode>,
+    ) -> Vec<(&'static str, &'static str)> {
         let mut result = Vec::new();
-        
+
         if let Some(condition) = condition {
             match condition {
-                ConditionNode::Condition { attribute, operator, value } => {
+                ConditionNode::Condition {
+                    attribute,
+                    operator,
+                    value,
+                } => {
                     // Only handle simple equals conditions for now
                     if let (Operator::Equal, Value::String(s)) = (operator, value) {
                         if attribute == "name" {
@@ -103,7 +110,7 @@ impl<'a> QueryExecutor<'a> {
                 _ => {}
             }
         }
-        
+
         result
     }
 }
@@ -129,22 +136,22 @@ struct ResultFormatter {
 
 impl ResultFormatter {
     fn new(format: &OutputFormat) -> Self {
-        Self { 
+        Self {
             format: match format {
                 OutputFormat::Text => OutputFormat::Text,
                 OutputFormat::Json => OutputFormat::Json,
                 OutputFormat::Csv => OutputFormat::Csv,
-            }
+            },
         }
     }
-    
+
     /// Format a collection of entities as a string
     fn format_entities(&self, entities: &[Box<dyn Entity>]) -> Result<String> {
         match self.format {
             OutputFormat::Text => {
                 let mut result = String::new();
                 result.push_str(&format!("Found {} entities:\n\n", entities.len()));
-                
+
                 for (i, entity) in entities.iter().enumerate() {
                     result.push_str(&format!("{}. {}\n", i + 1, entity.name()));
                     result.push_str(&format!("   Type: {:?}\n", entity.entity_type()));
@@ -153,30 +160,32 @@ impl ResultFormatter {
                     }
                     result.push_str("\n");
                 }
-                
+
                 Ok(result)
-            },
+            }
             // Implement other formats as needed
             _ => Ok(format!("Found {} entities", entities.len())),
         }
     }
-    
+
     /// Format traversal paths as a string
     fn format_paths(&self, paths: &[(EntityId, usize)]) -> Result<String> {
         match self.format {
             OutputFormat::Text => {
                 let mut result = String::new();
                 result.push_str(&format!("Found {} path nodes:\n\n", paths.len()));
-                
+
                 for (i, (entity_id, depth)) in paths.iter().enumerate() {
-                    result.push_str(&format!("{}. {} (depth: {})\n", 
-                                            i + 1, 
-                                            entity_id.as_str(), 
-                                            depth));
+                    result.push_str(&format!(
+                        "{}. {} (depth: {})\n",
+                        i + 1,
+                        entity_id.as_str(),
+                        depth
+                    ));
                 }
-                
+
                 Ok(result)
-            },
+            }
             // Implement other formats as needed
             _ => Ok(format!("Found {} paths", paths.len())),
         }
@@ -196,7 +205,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("test.db");
         let db = get_database(db_path.to_str().unwrap()).unwrap();
-        
+
         // Add function entities
         let func1_id = EntityId::new("func1");
         let base_func1 = BaseEntity::new(
@@ -264,7 +273,7 @@ mod tests {
             func2_id.clone(),
             RelationshipType::Calls,
         );
-        
+
         let rel2 = Relationship::new(
             crate::graph::relationship::RelationshipId::new("rel2"),
             func3_id.clone(),
@@ -285,7 +294,7 @@ mod tests {
 
         let query = parse_query("select functions").unwrap();
         let result = executor.execute(query).unwrap();
-        
+
         // Simple assertions to check that results contain expected data
         assert!(result.contains("Found 3 entities"));
         assert!(result.contains("auth_login"));
@@ -300,7 +309,7 @@ mod tests {
 
         let query = parse_query("select functions where name = 'auth_login'").unwrap();
         let result = executor.execute(query).unwrap();
-        
+
         assert!(result.contains("Found 1 entities"));
         assert!(result.contains("auth_login"));
         assert!(!result.contains("validate_token"));
@@ -313,7 +322,7 @@ mod tests {
 
         let query = parse_query("functions calling functions").unwrap();
         let result = executor.execute(query).unwrap();
-        
+
         assert!(result.contains("path nodes"));
         // Additional assertions can be made based on expected output format
     }

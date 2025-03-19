@@ -12,8 +12,8 @@ use anyhow::Result;
 
 // Re-export query types
 pub use parser::{
-    ConditionNode, EntityTypeSelector, Operator, QueryType, Relationship, 
-    SelectQuery, TraversalQuery, Value
+    ConditionNode, EntityTypeSelector, Operator, QueryType, Relationship, SelectQuery,
+    TraversalQuery, Value,
 };
 
 /// A simplified module that directly uses SQLite for queries
