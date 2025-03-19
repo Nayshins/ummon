@@ -12,9 +12,10 @@ use anyhow::Result;
 
 // Re-export query types
 pub use parser::{
-    ConditionNode, EntityTypeSelector, Operator, QueryType, Relationship, SelectQuery,
-    TraversalQuery, Value,
+    ConditionNode, EntityTypeSelector, Operator, QueryType, SelectQuery,
+    TraversalQuery, Value, 
 };
+pub use crate::graph::relationship::Relationship;
 
 /// A simplified module that directly uses SQLite for queries
 /// instead of loading the entire graph into memory

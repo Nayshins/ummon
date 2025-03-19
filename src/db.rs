@@ -914,7 +914,7 @@ impl Database {
     pub fn execute_entity_select(
         &self,
         entity_type: &EntityType,
-        conditions: &[(&str, &str)],
+        conditions: &[(String, String)],
     ) -> Result<Vec<Box<dyn Entity>>> {
         debug!(
             "Executing entity select query for type {:?} with {} conditions",
@@ -929,7 +929,7 @@ impl Database {
 
         for (i, (field, value)) in conditions.iter().enumerate() {
             sql.push_str(&format!(" AND {} = ?", field));
-            params.push(*value as &dyn rusqlite::ToSql);
+            params.push(value as &dyn rusqlite::ToSql);
         }
 
         // Get a connection from the pool

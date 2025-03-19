@@ -85,6 +85,7 @@ pub struct TraversalQuery {
     pub relationship: RelationshipSelector,
     pub target_type: EntityTypeSelector,
     pub conditions: Option<ConditionNode>,
+    pub max_depth: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -92,9 +93,12 @@ pub struct EntityTypeSelector {
     pub entity_type: EntityType,
 }
 
+use crate::query::executor::TraversalDirection;
+
 #[derive(Debug, Clone)]
 pub struct RelationshipSelector {
     pub relationship_type: RelationshipType,
+    pub direction: TraversalDirection,
 }
 
 #[derive(Debug, Clone)]
@@ -234,6 +238,7 @@ fn parse_traversal_query(pair: Pair<Rule>) -> Result<QueryType> {
         relationship,
         target_type,
         conditions,
+        max_depth: None, // Default to no depth limit
     }))
 }
 
@@ -276,7 +281,17 @@ fn parse_relationship(pair: Pair<Rule>) -> Result<RelationshipSelector> {
         _ => return Err(anyhow!("Unknown relationship type: '{}'", rel_str)),
     };
 
-    Ok(RelationshipSelector { relationship_type })
+    // Determine direction based on relationship verb form 
+    let direction = if rel_str.ends_with("ing") {
+        TraversalDirection::Outbound
+    } else {
+        TraversalDirection::Inbound
+    };
+
+    Ok(RelationshipSelector { 
+        relationship_type,
+        direction,
+    })
 }
 
 fn parse_condition(pair: Pair<Rule>) -> Result<ConditionNode> {

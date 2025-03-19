@@ -4,7 +4,7 @@ use std::f64;
 
 use crate::db::Database;
 use crate::graph::entity::{Entity, EntityId, EntityType};
-use crate::graph::relationship::RelationshipType;
+use crate::graph::relationship::{Relationship, RelationshipId, RelationshipType};
 
 use super::parser::{
     ConditionNode, EntityTypeSelector, Operator, QueryType, SelectQuery, TraversalQuery, Value,
@@ -83,7 +83,7 @@ impl<'a> QueryExecutor<'a> {
     fn build_conditions(
         &self,
         condition: &Option<ConditionNode>,
-    ) -> Vec<(&'static str, &'static str)> {
+    ) -> Vec<(String, String)> {
         let mut result = Vec::new();
 
         if let Some(condition) = condition {
@@ -96,9 +96,9 @@ impl<'a> QueryExecutor<'a> {
                     // Only handle simple equals conditions for now
                     if let (Operator::Equal, Value::String(s)) = (operator, value) {
                         if attribute == "name" {
-                            result.push(("name", s.as_str()));
+                            result.push(("name".to_string(), s.clone()));
                         } else if attribute == "file_path" {
-                            result.push(("file_path", s.as_str()));
+                            result.push(("file_path".to_string(), s.clone()));
                         }
                         // Add other attributes as needed
                     }
@@ -114,13 +114,15 @@ impl<'a> QueryExecutor<'a> {
 }
 
 /// Direction for traversal queries
+#[derive(Debug, Clone)]
 pub enum TraversalDirection {
     Outbound,
     Inbound,
     Both,
 }
 
-/// Output format for query results
+/// Output format for query results 
+#[derive(Debug, Clone)]
 pub enum OutputFormat {
     Text,
     Json,
@@ -128,12 +130,12 @@ pub enum OutputFormat {
 }
 
 /// Formatter for query results
-struct ResultFormatter {
+pub struct ResultFormatter {
     format: OutputFormat,
 }
 
 impl ResultFormatter {
-    fn new(format: &OutputFormat) -> Self {
+    pub fn new(format: &OutputFormat) -> Self {
         Self {
             format: match format {
                 OutputFormat::Text => OutputFormat::Text,
@@ -144,7 +146,7 @@ impl ResultFormatter {
     }
 
     /// Format a collection of entities as a string
-    fn format_entities(&self, entities: &[Box<dyn Entity>]) -> Result<String> {
+    pub fn format_entities(&self, entities: &[Box<dyn Entity>]) -> Result<String> {
         match self.format {
             OutputFormat::Text => {
                 let mut result = String::new();
@@ -167,7 +169,7 @@ impl ResultFormatter {
     }
 
     /// Format traversal paths as a string
-    fn format_paths(&self, paths: &[(EntityId, usize)]) -> Result<String> {
+    pub fn format_paths(&self, paths: &[(EntityId, usize)]) -> Result<String> {
         match self.format {
             OutputFormat::Text => {
                 let mut result = String::new();
@@ -266,14 +268,14 @@ mod tests {
 
         // Create relationships
         let rel1 = Relationship::new(
-            crate::graph::relationship::RelationshipId::new("rel1"),
+            RelationshipId::new("rel1"),
             func1_id.clone(),
             func2_id.clone(),
             RelationshipType::Calls,
         );
 
         let rel2 = Relationship::new(
-            crate::graph::relationship::RelationshipId::new("rel2"),
+            RelationshipId::new("rel2"),
             func3_id.clone(),
             func1_id.clone(),
             RelationshipType::Calls,

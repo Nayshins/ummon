@@ -7,6 +7,29 @@ use crate::prompt::llm_integration::{query_llm, LlmConfig};
 use crate::prompt::llm_integration::LlmProvider;
 use crate::query::parser::parse_query;
 
+/// Public function to translate a natural language query to query language
+pub async fn translate(
+    query: &str, 
+    llm_provider: Option<&str>, 
+    llm_model: Option<&str>
+) -> Result<crate::query::parser::QueryType> {
+    // Get LLM configuration
+    let config = get_llm_config(llm_provider, llm_model);
+    
+    // Create translator
+    let translator = NaturalLanguageTranslator::new(config);
+    
+    // Translate the query
+    let (translated, confidence) = translator.translate(query).await?;
+    
+    // Print translation info
+    eprintln!("Translated query: {}", translated);
+    eprintln!("Translation confidence: {:.2}", confidence);
+    
+    // Parse the translated query
+    parse_query(&translated)
+}
+
 /// Translates natural language queries into Ummon query language
 pub struct NaturalLanguageTranslator {
     config: LlmConfig,
