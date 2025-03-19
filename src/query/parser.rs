@@ -281,14 +281,14 @@ fn parse_relationship(pair: Pair<Rule>) -> Result<RelationshipSelector> {
         _ => return Err(anyhow!("Unknown relationship type: '{}'", rel_str)),
     };
 
-    // Determine direction based on relationship verb form 
+    // Determine direction based on relationship verb form
     let direction = if rel_str.ends_with("ing") {
         TraversalDirection::Outbound
     } else {
         TraversalDirection::Inbound
     };
 
-    Ok(RelationshipSelector { 
+    Ok(RelationshipSelector {
         relationship_type,
         direction,
     })

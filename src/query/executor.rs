@@ -80,10 +80,7 @@ impl<'a> QueryExecutor<'a> {
     }
 
     /// Convert ConditionNode tree to flat SQL-compatible conditions
-    fn build_conditions(
-        &self,
-        condition: &Option<ConditionNode>,
-    ) -> Vec<(String, String)> {
+    fn build_conditions(&self, condition: &Option<ConditionNode>) -> Vec<(String, String)> {
         let mut result = Vec::new();
 
         if let Some(condition) = condition {
@@ -121,7 +118,7 @@ pub enum TraversalDirection {
     Both,
 }
 
-/// Output format for query results 
+/// Output format for query results
 #[derive(Debug, Clone)]
 pub enum OutputFormat {
     Text,
