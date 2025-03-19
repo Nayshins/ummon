@@ -262,7 +262,7 @@ impl Database {
     /// Load a single entity by ID
     pub fn load_entity(&self, id: &EntityId) -> Result<Option<Box<dyn Entity>>> {
         debug!("Loading entity {} from {}", id.as_str(), self.db_path);
-        
+
         // Get a connection from the pool
         let conn = self.get_connection()?;
         let mut stmt = conn.prepare(
@@ -271,7 +271,7 @@ impl Database {
         )?;
 
         let mut rows = stmt.query(params![id.as_str()])?;
-        
+
         if let Some(row) = rows.next()? {
             let id: String = row.get(0)?;
             let name: String = row.get(1)?;
@@ -745,17 +745,21 @@ impl Database {
         debug!("Loaded {} relationships from database", relationships.len());
         Ok(relationships)
     }
-    
+
     /// Load relationships for a specific entity
     pub fn load_relationships_for_entity(&self, entity_id: &EntityId) -> Result<Vec<Relationship>> {
-        debug!("Loading relationships for entity {} from {}", entity_id.as_str(), self.db_path);
-        
+        debug!(
+            "Loading relationships for entity {} from {}",
+            entity_id.as_str(),
+            self.db_path
+        );
+
         // Get a connection from the pool
         let conn = self.get_connection()?;
         let mut stmt = conn.prepare(
             "SELECT id, source_id, target_id, relationship_type, weight, metadata 
              FROM relationships 
-             WHERE source_id = ? OR target_id = ?"
+             WHERE source_id = ? OR target_id = ?",
         )?;
 
         let rows = stmt.query_map([entity_id.as_str(), entity_id.as_str()], |row| {
@@ -779,7 +783,8 @@ impl Database {
         let mut relationships = Vec::new();
 
         for row_result in rows {
-            let result = row_result.map_err(|e| anyhow::anyhow!("Error reading relationship row: {}", e));
+            let result =
+                row_result.map_err(|e| anyhow::anyhow!("Error reading relationship row: {}", e));
 
             let (id, source_id, target_id, relationship_type_str, weight, metadata_json) =
                 match result {
@@ -818,7 +823,11 @@ impl Database {
             relationships.push(relationship);
         }
 
-        debug!("Loaded {} relationships for entity {}", relationships.len(), entity_id.as_str());
+        debug!(
+            "Loaded {} relationships for entity {}",
+            relationships.len(),
+            entity_id.as_str()
+        );
         Ok(relationships)
     }
 

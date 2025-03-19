@@ -197,7 +197,7 @@ mod tests {
     use crate::graph::entity::{BaseEntity, EntityId, EntityType, FunctionEntity, Visibility};
     use crate::query::parser::parse_query;
     use tempfile::tempdir;
-    
+
     // Helper function to create a test database
     fn create_test_db() -> Database {
         let dir = tempdir().unwrap();

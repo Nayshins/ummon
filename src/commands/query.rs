@@ -23,7 +23,7 @@ pub async fn run(
     // Get a connection to the database
     let db = get_database("ummon.db")?;
     let executor = QueryExecutor::new(&db);
-    
+
     // Parse or translate the query
     let query = if natural {
         // Translate natural language to query language
@@ -32,15 +32,19 @@ pub async fn run(
         // Parse directly
         parser::parse_query(query_str)?
     };
-    
+
     // Execute the query using SQLite
     let result = executor.execute(query)?;
-    
+
     // Print the result
     println!("{}", result);
 
     // Add help text for first-time users
-    if result.is_empty() || result.trim() == "[]" || result.trim() == "No results found." || result.contains("Found 0") {
+    if result.is_empty()
+        || result.trim() == "[]"
+        || result.trim() == "No results found."
+        || result.contains("Found 0")
+    {
         eprintln!("\nNo results found. Here are some tips:");
         eprintln!(" - Check if your query syntax is correct");
         eprintln!(" - Try using more general terms or wildcards like '%'");
