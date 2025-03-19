@@ -1,4 +1,5 @@
-use crate::query::{self, QueryOptions};
+use crate::db::get_database;
+use crate::query::{self, nl_translator, parser, QueryExecutor};
 use anyhow::Result;
 
 /// Runs the query command with the provided arguments
@@ -12,15 +13,6 @@ pub async fn run(
 ) -> Result<()> {
     tracing::info!("Querying knowledge graph: {}", query_str);
 
-    // Set up query options
-    let options = QueryOptions {
-        format: format.to_string(),
-        natural,
-        llm_provider: llm_provider.map(|s| s.to_string()),
-        llm_model: llm_model.map(|s| s.to_string()),
-        limit,
-    };
-
     // Show what mode we're using
     if natural {
         eprintln!("Using natural language translation");
@@ -28,14 +20,27 @@ pub async fn run(
         eprintln!("Using direct query syntax");
     }
 
-    // Execute the query
-    let result = query::execute_query(query_str, options).await?;
-
+    // Get a connection to the database
+    let db = get_database("ummon.db")?;
+    let executor = QueryExecutor::new(&db);
+    
+    // Parse or translate the query
+    let query = if natural {
+        // Translate natural language to query language
+        nl_translator::translate(query_str, llm_provider, llm_model).await?
+    } else {
+        // Parse directly
+        parser::parse_query(query_str)?
+    };
+    
+    // Execute the query using SQLite
+    let result = executor.execute(query)?;
+    
     // Print the result
     println!("{}", result);
 
     // Add help text for first-time users
-    if result.is_empty() || result.trim() == "[]" || result.trim() == "No results found." {
+    if result.is_empty() || result.trim() == "[]" || result.trim() == "No results found." || result.contains("Found 0") {
         eprintln!("\nNo results found. Here are some tips:");
         eprintln!(" - Check if your query syntax is correct");
         eprintln!(" - Try using more general terms or wildcards like '%'");
