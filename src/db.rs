@@ -823,34 +823,35 @@ impl Database {
     }
 
     /// Execute a traversal query using a recursive Common Table Expression (CTE)
-    pub fn execute_traversal(&self, 
-        start_id: &EntityId, 
+    pub fn execute_traversal(
+        &self,
+        start_id: &EntityId,
         relationship_type: Option<&RelationshipType>,
         direction: &str,
-        max_depth: Option<usize>
+        max_depth: Option<usize>,
     ) -> Result<Vec<(EntityId, usize)>> {
         debug!(
-            "Executing traversal query from {} with direction {}", 
-            start_id.as_str(), 
+            "Executing traversal query from {} with direction {}",
+            start_id.as_str(),
             direction
         );
-        
+
         let conn = self.get_connection()?;
-        
+
         // Build the relationship filter condition
         let rel_filter = if let Some(rel_type) = relationship_type {
             format!("AND r.relationship_type = '{}'", rel_type.to_string())
         } else {
             String::new()
         };
-        
+
         // Build the depth filter condition
         let depth_filter = if let Some(depth) = max_depth {
             format!("AND t.depth <= {}", depth)
         } else {
             String::new()
         };
-        
+
         // Build the direction condition
         let direction_condition = match direction {
             "outbound" => "r.source_id = t.id",
@@ -858,7 +859,7 @@ impl Database {
             "both" => "(r.source_id = t.id OR r.target_id = t.id)",
             _ => return Err(anyhow::anyhow!("Invalid direction: {}", direction)),
         };
-        
+
         // Define the target selection based on direction
         let next_id = match direction {
             "outbound" => "r.target_id",
@@ -866,7 +867,7 @@ impl Database {
             "both" => "CASE WHEN r.source_id = t.id THEN r.target_id ELSE r.source_id END",
             _ => return Err(anyhow::anyhow!("Invalid direction: {}", direction)),
         };
-        
+
         // Build the recursive CTE SQL query
         let sql = format!(
             "WITH RECURSIVE traverse(id, depth) AS (
@@ -880,7 +881,7 @@ impl Database {
             SELECT id, depth FROM traverse ORDER BY depth",
             next_id, direction_condition, rel_filter, depth_filter
         );
-        
+
         // Execute the query
         let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map([start_id.as_str()], |row| {
@@ -888,32 +889,44 @@ impl Database {
             let depth: usize = row.get(1)?;
             Ok((EntityId::new(&id), depth))
         })?;
-        
+
         // Collect the results
         let result = rows.collect::<rusqlite::Result<Vec<_>>>()?;
-        debug!("Traversal found {} nodes from {}", result.len(), start_id.as_str());
-        
+        debug!(
+            "Traversal found {} nodes from {}",
+            result.len(),
+            start_id.as_str()
+        );
+
         Ok(result)
     }
 
     /// Execute a SQL query to select entities based on entity type and conditions
-    pub fn execute_entity_select(&self, entity_type: &EntityType, conditions: &[(&str, &str)]) -> Result<Vec<Box<dyn Entity>>> {
-        debug!("Executing entity select query for type {:?} with {} conditions", entity_type, conditions.len());
-        
+    pub fn execute_entity_select(
+        &self,
+        entity_type: &EntityType,
+        conditions: &[(&str, &str)],
+    ) -> Result<Vec<Box<dyn Entity>>> {
+        debug!(
+            "Executing entity select query for type {:?} with {} conditions",
+            entity_type,
+            conditions.len()
+        );
+
         // Build the SQL query with conditions
         let mut sql = "SELECT id, name, entity_type, file_path, location, documentation, containing_entity, data FROM entities WHERE entity_type = ?".to_string();
-        
+
         let mut params: Vec<&dyn rusqlite::ToSql> = vec![&entity_type.to_string()];
-        
+
         for (i, (field, value)) in conditions.iter().enumerate() {
             sql.push_str(&format!(" AND {} = ?", field));
             params.push(*value as &dyn rusqlite::ToSql);
         }
-        
+
         // Get a connection from the pool
         let conn = self.get_connection()?;
         let mut stmt = conn.prepare(&sql)?;
-        
+
         // Execute the query with parameters
         let rows = stmt.query_map(rusqlite::params_from_iter(params.iter()), |row| {
             let id: String = row.get(0)?;
@@ -936,9 +949,9 @@ impl Database {
                 data_json,
             ))
         })?;
-        
+
         let mut entities = Vec::new();
-        
+
         // Process the results
         for row_result in rows {
             let result = row_result.map_err(|e| anyhow::anyhow!("Error reading entity row: {}", e));
@@ -977,7 +990,8 @@ impl Database {
             };
 
             // Create BaseEntity
-            let mut base = BaseEntity::new(EntityId::new(&id), name, entity_type.clone(), file_path);
+            let mut base =
+                BaseEntity::new(EntityId::new(&id), name, entity_type.clone(), file_path);
             base.location = location;
             base.documentation = documentation;
             base.containing_entity = containing_entity.map(|id| EntityId::new(&id));
@@ -1122,11 +1136,15 @@ impl Database {
 
             entities.push(entity);
         }
-        
-        debug!("Selected {} entities of type {:?}", entities.len(), entity_type);
+
+        debug!(
+            "Selected {} entities of type {:?}",
+            entities.len(),
+            entity_type
+        );
         Ok(entities)
     }
-    
+
     /// Save multiple entities and relationships in a single transaction
     pub fn save_all_in_transaction(
         &self,

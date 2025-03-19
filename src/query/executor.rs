@@ -32,13 +32,12 @@ impl<'a> QueryExecutor<'a> {
     fn execute_select(&self, query: &SelectQuery) -> Result<String> {
         // Convert query conditions to SQL parameter pairs
         let conditions = self.build_conditions(&query.conditions);
-        
+
         // Execute the query against the database
-        let entities = self.db.execute_entity_select(
-            &query.entity_type.entity_type,
-            &conditions
-        )?;
-        
+        let entities = self
+            .db
+            .execute_entity_select(&query.entity_type.entity_type, &conditions)?;
+
         // Format the results
         let formatter = ResultFormatter::new(&OutputFormat::Text);
         formatter.format_entities(&entities)
@@ -48,13 +47,12 @@ impl<'a> QueryExecutor<'a> {
     fn execute_traversal(&self, query: &TraversalQuery) -> Result<String> {
         // Get all entities matching the source type
         let source_conditions = self.build_conditions(&query.conditions);
-        let source_entities = self.db.execute_entity_select(
-            &query.source_type.entity_type,
-            &source_conditions
-        )?;
-        
+        let source_entities = self
+            .db
+            .execute_entity_select(&query.source_type.entity_type, &source_conditions)?;
+
         let mut all_paths = Vec::new();
-        
+
         // For each source entity, run a traversal query
         for entity in &source_entities {
             let direction = match query.relationship.direction {
