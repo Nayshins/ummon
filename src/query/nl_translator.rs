@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use indoc::indoc;
 
-use crate::prompt::llm_integration::{query_llm, LlmConfig};
+use crate::prompt::llm_integration::{get_llm_config, query_llm, LlmConfig};
 
 #[cfg(test)]
 use crate::prompt::llm_integration::LlmProvider;

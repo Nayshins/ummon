@@ -924,12 +924,14 @@ impl Database {
 
         // Build the SQL query with conditions
         let mut sql = "SELECT id, name, entity_type, file_path, location, documentation, containing_entity, data FROM entities WHERE entity_type = ?".to_string();
+        
+        // Create a binding for the entity_type string to extend its lifetime
+        let entity_type_str = entity_type.to_string();
+        let mut params: Vec<&dyn rusqlite::ToSql> = vec![&entity_type_str];
 
-        let mut params: Vec<&dyn rusqlite::ToSql> = vec![&entity_type.to_string()];
-
-        for (i, (field, value)) in conditions.iter().enumerate() {
+        for (_, (field, value)) in conditions.iter().enumerate() {
             sql.push_str(&format!(" AND {} = ?", field));
-            params.push(value as &dyn rusqlite::ToSql);
+            params.push(value.as_str() as &dyn rusqlite::ToSql);
         }
 
         // Get a connection from the pool
