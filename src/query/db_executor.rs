@@ -4,9 +4,7 @@ use crate::db::Database;
 use crate::graph::entity::{Entity, EntityId};
 use crate::graph::relationship::RelationshipType;
 
-use super::parser::{
-    ConditionNode, Operator, QueryType, SelectQuery, TraversalQuery, Value,
-};
+use super::parser::{ConditionNode, Operator, QueryType, SelectQuery, TraversalQuery, Value};
 
 /// Executes a parsed query against the SQLite database directly
 pub struct DbQueryExecutor<'a> {
