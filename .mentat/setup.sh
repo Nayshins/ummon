@@ -1,33 +1,39 @@
 #!/bin/bash
 
-# This is an informational setup script for the Ummon project
+echo "=== Starting Ummon Development Environment Setup ==="
 
-echo "=== Ummon Development Environment Setup ==="
-echo "This Rust project requires the following dependencies:"
-echo "- Rust toolchain (cargo, rustc)"
-echo ""
-echo "Instructions to install Rust:"
-echo "1. Visit https://rustup.rs for installation"
-echo "2. Or run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
-echo "3. After installation: source $HOME/.cargo/env"
-echo ""
-echo "Common development commands:"
+# Check if Rust is available 
+if ! command -v cargo &> /dev/null; then
+    echo "Rust not detected. Installing Rust toolchain..."
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    source "$HOME/.cargo/env"
+else
+    echo "Rust detected: $(cargo --version)"
+    # Update Rust to ensure we have the latest toolchain
+    rustup update
+fi
+
+# Build the project to ensure all dependencies are installed
+echo "Building project to download dependencies..."
+cargo build
+
+# Install additional tools that might be useful for development
+if ! command -v tree-sitter &> /dev/null; then
+    echo "Installing tree-sitter CLI for grammar development..."
+    cargo install tree-sitter-cli
+fi
+
+echo "Setting up environment..."
+# Create any necessary directories
+mkdir -p .vscode
+# Note: we're not creating any files here, just ensuring directories exist
+
+echo "=== Ummon Development Environment Setup Complete ==="
+echo "You can now work with the project using these commands:"
 echo "- cargo build     # Build the project"
 echo "- cargo test      # Run tests"
 echo "- cargo fmt       # Format code"
 echo "- cargo clippy    # Lint code"
 echo ""
-echo "See README.md for more details on working with this project."
-echo "=== Setup Information Complete ==="
-
-# Check if we can determine Rust availability (informational only)
-if command -v cargo &> /dev/null; then
-    echo "Detected Rust: $(cargo --version)"
-    echo "Your environment appears to be ready for development."
-else
-    echo "Note: Rust was not detected in your current environment."
-    echo "      Please install Rust before working with this project."
-fi
-
-# Always exit with success code - this is informational only
-exit 0
+echo "Note: If you need to use OpenRouter API for LLM services,"
+echo "please set the OPENROUTER_API_KEY environment variable."

@@ -3,3 +3,9 @@
 knowledge_graph.json
 ummon.db
 *.db
+.DS_Store
+**/.DS_Store
+.idea/
+.vscode/
+**/*.rs.bk
+Cargo.lock.bk
