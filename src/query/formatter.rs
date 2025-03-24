@@ -35,9 +35,12 @@ pub struct ResultFormatter<'a> {
 impl<'a> ResultFormatter<'a> {
     /// Create a new formatter with knowledge graph (for traditional query)
     pub fn new(kg: &'a KnowledgeGraph, format: OutputFormat) -> Self {
-        Self { kg: Some(kg), format }
+        Self {
+            kg: Some(kg),
+            format,
+        }
     }
-    
+
     /// Create a new formatter without knowledge graph (for database-only query)
     pub fn new_for_boxed_entities(format: OutputFormat) -> Self {
         Self { kg: None, format }
@@ -54,19 +57,19 @@ impl<'a> ResultFormatter<'a> {
                 } else {
                     Err(anyhow::anyhow!("Tree format requires knowledge graph"))
                 }
-            },
+            }
             OutputFormat::Csv => self.format_csv(entities),
         }
     }
-    
+
     /// Format query results (boxed entities)
     pub fn format_boxed_entities(&self, entities: &[Box<dyn Entity>]) -> Result<String> {
         match self.format {
             OutputFormat::Json => self.format_json_boxed(entities),
             OutputFormat::Text => self.format_text_boxed(entities),
-            OutputFormat::Tree => {
-                Err(anyhow::anyhow!("Tree format not supported for boxed entities"))
-            },
+            OutputFormat::Tree => Err(anyhow::anyhow!(
+                "Tree format not supported for boxed entities"
+            )),
             OutputFormat::Csv => self.format_csv_boxed(entities),
         }
     }
@@ -97,7 +100,7 @@ impl<'a> ResultFormatter<'a> {
 
         Ok(serde_json::to_string_pretty(&json_entities)?)
     }
-    
+
     /// Format as JSON for boxed entities
     fn format_json_boxed(&self, entities: &[Box<dyn Entity>]) -> Result<String> {
         let json_entities: Vec<Value> = entities
@@ -145,7 +148,7 @@ impl<'a> ResultFormatter<'a> {
 
         Ok(result)
     }
-    
+
     /// Format as plain text for boxed entities
     fn format_text_boxed(&self, entities: &[Box<dyn Entity>]) -> Result<String> {
         if entities.is_empty() {
@@ -266,7 +269,7 @@ impl<'a> ResultFormatter<'a> {
 
         Ok(result)
     }
-    
+
     /// Format as CSV for boxed entities
     fn format_csv_boxed(&self, entities: &[Box<dyn Entity>]) -> Result<String> {
         if entities.is_empty() {
@@ -399,11 +402,11 @@ mod tests {
 
         kg
     }
-    
+
     // Helper function to create test boxed entities
     fn create_test_boxed_entities() -> Vec<Box<dyn Entity>> {
         let mut entities = Vec::new();
-        
+
         // Create a function entity with metadata
         let id1 = EntityId::new("func1");
         let mut base1 = BaseEntity::new(
@@ -430,9 +433,9 @@ mod tests {
             is_constructor: false,
             is_abstract: false,
         };
-        
+
         entities.push(Box::new(func) as Box<dyn Entity>);
-        
+
         // Create another function with different metadata
         let id2 = EntityId::new("func2");
         let mut base2 = BaseEntity::new(
@@ -456,9 +459,9 @@ mod tests {
             is_constructor: false,
             is_abstract: false,
         };
-        
+
         entities.push(Box::new(func2) as Box<dyn Entity>);
-        
+
         entities
     }
 
@@ -476,14 +479,14 @@ mod tests {
         assert!(json_result.contains("TestUser"));
         assert!(json_result.contains("AnotherUser"));
     }
-    
+
     #[test]
     fn test_format_json_boxed() {
         let formatter = ResultFormatter::new_for_boxed_entities(OutputFormat::Json);
         let boxed_entities = create_test_boxed_entities();
-        
+
         let json_result = formatter.format_boxed_entities(&boxed_entities).unwrap();
-        
+
         assert!(json_result.contains("test_function"));
         assert!(json_result.contains("another_function"));
         assert!(json_result.contains("author"));
@@ -505,14 +508,14 @@ mod tests {
         assert!(text_result.contains("func2"));
         assert!(text_result.contains("src/test.rs"));
     }
-    
+
     #[test]
     fn test_format_text_boxed() {
         let formatter = ResultFormatter::new_for_boxed_entities(OutputFormat::Text);
         let boxed_entities = create_test_boxed_entities();
-        
+
         let text_result = formatter.format_boxed_entities(&boxed_entities).unwrap();
-        
+
         assert!(text_result.contains("test_function"));
         assert!(text_result.contains("another_function"));
         assert!(text_result.contains("func1"));
@@ -546,14 +549,14 @@ mod tests {
             .contains("func1,test_function,Function,src/test.rs,TestUser,A test function"));
         assert!(csv_result.contains("func2,another_function,Function,src/test.rs,AnotherUser,"));
     }
-    
+
     #[test]
     fn test_format_csv_boxed() {
         let formatter = ResultFormatter::new_for_boxed_entities(OutputFormat::Csv);
         let boxed_entities = create_test_boxed_entities();
-        
+
         let csv_result = formatter.format_boxed_entities(&boxed_entities).unwrap();
-        
+
         assert!(csv_result.contains("id,name,type,file_path,author,description"));
         assert!(csv_result
             .contains("func1,test_function,Function,src/test.rs,TestUser,A test function"));
@@ -570,14 +573,14 @@ mod tests {
 
         assert_eq!("No entities found", result);
     }
-    
+
     #[test]
     fn test_empty_results_boxed() {
         let formatter = ResultFormatter::new_for_boxed_entities(OutputFormat::Text);
-        
+
         let empty_entities: Vec<Box<dyn Entity>> = vec![];
         let result = formatter.format_boxed_entities(&empty_entities).unwrap();
-        
+
         assert_eq!("No entities found", result);
     }
 }

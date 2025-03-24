@@ -1,9 +1,9 @@
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use std::f64;
 
-use crate::graph::entity::{Entity, EntityType, EntityId};
-use crate::graph::relationship::RelationshipType;
 use crate::db::Database;
+use crate::graph::entity::{Entity, EntityId, EntityType};
+use crate::graph::relationship::RelationshipType;
 
 use super::parser::{
     ConditionNode, EntityTypeSelector, Operator, QueryType, SelectQuery, TraversalQuery, Value,
@@ -30,24 +30,27 @@ impl<'a> DbQueryExecutor<'a> {
     /// Execute a select query using direct SQL
     fn execute_select(&self, query: &SelectQuery) -> Result<Vec<Box<dyn Entity>>> {
         let entity_type = &query.entity_type.entity_type;
-        
+
         // If we have conditions, convert them to SQL
         let sql_condition = match &query.conditions {
             Some(condition) => Some(self.condition_to_sql(condition)?),
             None => None,
         };
-        
+
         // Execute the query using the database's query_entities_by_type method
-        self.db.query_entities_by_type(entity_type, sql_condition.as_deref())
+        self.db
+            .query_entities_by_type(entity_type, sql_condition.as_deref())
     }
 
     /// Execute a traversal query using the database's find_paths method
     fn execute_traversal(&self, query: &TraversalQuery) -> Result<Vec<Box<dyn Entity>>> {
         // Get all entities matching the source type
-        let source_entities = self.db.query_entities_by_type(&query.source_type.entity_type, None)?;
-        
+        let source_entities = self
+            .db
+            .query_entities_by_type(&query.source_type.entity_type, None)?;
+
         let mut result_entities = Vec::new();
-        
+
         // For each source entity, find paths based on relationship criteria
         for source_entity in source_entities {
             // Configure traversal direction
@@ -66,7 +69,7 @@ impl<'a> DbQueryExecutor<'a> {
                 RelationshipType::DependsOn => "outbound",
                 RelationshipType::Other(_) => "both",
             };
-            
+
             // Find paths from this entity using database's find_paths method
             let paths = self.db.find_paths(
                 source_entity.id(),
@@ -74,9 +77,9 @@ impl<'a> DbQueryExecutor<'a> {
                 Some(&query.target_type.entity_type),
                 Some(&query.relationship.relationship_type),
                 10, // reasonable max depth
-                direction
+                direction,
             )?;
-            
+
             // If paths were found, add the source entity to results
             if !paths.is_empty() {
                 // Apply conditions to target entities if conditions exist
@@ -91,43 +94,50 @@ impl<'a> DbQueryExecutor<'a> {
                 }
             }
         }
-        
+
         Ok(result_entities)
     }
-    
+
     /// Check if any traversal target meets the conditions
-    fn check_traversal_targets(&self, paths: &[(EntityId, usize)], condition: &ConditionNode) -> Result<bool> {
+    fn check_traversal_targets(
+        &self,
+        paths: &[(EntityId, usize)],
+        condition: &ConditionNode,
+    ) -> Result<bool> {
         // Only consider entities that are targets (not the source) - depth > 0
-        let target_ids: Vec<&EntityId> = paths.iter()
+        let target_ids: Vec<&EntityId> = paths
+            .iter()
             .filter(|(_, depth)| *depth > 0)
             .map(|(id, _)| id)
             .collect();
-            
+
         if target_ids.is_empty() {
             return Ok(false);
         }
-        
+
         // Load each target entity and check against condition
         for target_id in target_ids {
             if let Some(entity) = self.db.load_entity(target_id)? {
                 // Convert condition to SQL for efficient filtering
                 let sql_condition = self.condition_to_sql(condition)?;
-                
+
                 // Extract entity type for SQL query
                 let entity_type = entity.entity_type();
-                
+
                 // Use query_entities_by_type with condition to filter this specific entity
                 let id_condition = format!("id = '{}'", target_id.as_str());
                 let combined_condition = format!("{} AND {}", id_condition, sql_condition);
-                
-                let matching_entities = self.db.query_entities_by_type(&entity_type, Some(&combined_condition))?;
-                
+
+                let matching_entities = self
+                    .db
+                    .query_entities_by_type(&entity_type, Some(&combined_condition))?;
+
                 if !matching_entities.is_empty() {
                     return Ok(true);
                 }
             }
         }
-        
+
         Ok(false)
     }
 
@@ -155,19 +165,28 @@ impl<'a> DbQueryExecutor<'a> {
                     "documentation" => Ok("documentation IS NOT NULL".to_string()),
                     // For other attributes, we'd need to check metadata in JSON
                     // This is simplified, as proper handling would need JSON extraction
-                    _ => Ok(format!("data LIKE '%{}%'", attr))
+                    _ => Ok(format!("data LIKE '%{}%'", attr)),
                 }
             }
-            ConditionNode::Condition { attribute, operator, value } => {
+            ConditionNode::Condition {
+                attribute,
+                operator,
+                value,
+            } => {
                 let attr_name = match *attribute {
                     "name" => "name",
                     "file_path" | "path" => "file_path",
                     "documentation" => "documentation",
                     // For other attributes, we'd need to check metadata or data JSON
                     // This is simplified and might not work for all attributes
-                    _ => return Err(anyhow!("Attribute {} is not directly supported in SQL conversion", attribute))
+                    _ => {
+                        return Err(anyhow!(
+                            "Attribute {} is not directly supported in SQL conversion",
+                            attribute
+                        ))
+                    }
                 };
-                
+
                 let sql_op = match operator {
                     Operator::Equal => "=",
                     Operator::NotEqual => "!=",
@@ -177,12 +196,12 @@ impl<'a> DbQueryExecutor<'a> {
                     Operator::LessThanOrEqual => "<=",
                     Operator::Like => "LIKE",
                 };
-                
+
                 let sql_value = match value {
                     Value::String(s) => format!("'{}'", s.replace('\'', "''")), // Escape single quotes
                     Value::Number(n) => n.to_string(),
                 };
-                
+
                 Ok(format!("{} {} {}", attr_name, sql_op, sql_value))
             }
         }
@@ -192,9 +211,9 @@ impl<'a> DbQueryExecutor<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::get_database;
     use crate::graph::entity::{BaseEntity, EntityId, EntityType, FunctionEntity, Visibility};
     use crate::query::parser::parse_query;
-    use crate::db::get_database;
     use tempfile::tempdir;
 
     // Helper function to create a test database with sample data

@@ -1,11 +1,11 @@
-mod executor;
 mod db_executor;
+mod executor;
 mod formatter;
 mod nl_translator;
 mod parser;
 
-pub use executor::QueryExecutor;
 pub use db_executor::DbQueryExecutor;
+pub use executor::QueryExecutor;
 pub use formatter::{OutputFormat, ResultFormatter};
 pub use nl_translator::NaturalLanguageTranslator;
 pub use parser::parse_query;
@@ -118,7 +118,7 @@ impl Default for QueryOptions {
 pub async fn execute_query(query_str: &str, options: QueryOptions) -> Result<String> {
     // Connect to the database
     let db = crate::db::get_database("ummon.db")?;
-    
+
     // Use the direct database query approach
     let result = process_query_with_db(
         &db,

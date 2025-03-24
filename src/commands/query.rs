@@ -68,7 +68,11 @@ pub async fn run(
     println!("{}", output);
 
     // Add help text for first-time users
-    if output.is_empty() || output.trim() == "[]" || output.trim() == "No results found." || output.trim() == "No entities found" {
+    if output.is_empty()
+        || output.trim() == "[]"
+        || output.trim() == "No results found."
+        || output.trim() == "No entities found"
+    {
         eprintln!("\nNo results found. Here are some tips:");
         eprintln!(" - Check if your query syntax is correct");
         eprintln!(" - Try using more general terms or wildcards like '%'");

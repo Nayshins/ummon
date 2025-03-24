@@ -482,7 +482,11 @@ impl Database {
 
     /// Load a single entity by ID
     pub fn load_entity(&self, id: &EntityId) -> Result<Option<Box<dyn Entity>>> {
-        debug!("Loading entity with ID {} from {}", id.as_str(), self.db_path);
+        debug!(
+            "Loading entity with ID {} from {}",
+            id.as_str(),
+            self.db_path
+        );
 
         // Get a connection from the pool
         let conn = self.get_connection()?;
@@ -492,7 +496,7 @@ impl Database {
         )?;
 
         let mut rows = stmt.query([id.as_str()])?;
-        
+
         if let Some(row_result) = rows.next()? {
             let id: String = row_result.get(0)?;
             let name: String = row_result.get(1)?;
@@ -746,17 +750,21 @@ impl Database {
         debug!("Loaded {} relationships from database", relationships.len());
         Ok(relationships)
     }
-    
+
     /// Load relationships for a specific entity (both incoming and outgoing)
     pub fn load_relationships_for_entity(&self, entity_id: &EntityId) -> Result<Vec<Relationship>> {
-        debug!("Loading relationships for entity {} from {}", entity_id.as_str(), self.db_path);
+        debug!(
+            "Loading relationships for entity {} from {}",
+            entity_id.as_str(),
+            self.db_path
+        );
 
         // Get a connection from the pool
         let conn = self.get_connection()?;
         let mut stmt = conn.prepare(
             "SELECT id, source_id, target_id, relationship_type, weight, metadata 
              FROM relationships 
-             WHERE source_id = ? OR target_id = ?"
+             WHERE source_id = ? OR target_id = ?",
         )?;
 
         let rows = stmt.query_map([entity_id.as_str(), entity_id.as_str()], |row| {
@@ -820,20 +828,28 @@ impl Database {
             relationships.push(relationship);
         }
 
-        debug!("Loaded {} relationships for entity {}", relationships.len(), entity_id.as_str());
+        debug!(
+            "Loaded {} relationships for entity {}",
+            relationships.len(),
+            entity_id.as_str()
+        );
         Ok(relationships)
     }
-    
+
     /// Load outgoing relationships for a specific entity
     pub fn load_outgoing_relationships(&self, entity_id: &EntityId) -> Result<Vec<Relationship>> {
-        debug!("Loading outgoing relationships for entity {} from {}", entity_id.as_str(), self.db_path);
+        debug!(
+            "Loading outgoing relationships for entity {} from {}",
+            entity_id.as_str(),
+            self.db_path
+        );
 
         // Get a connection from the pool
         let conn = self.get_connection()?;
         let mut stmt = conn.prepare(
             "SELECT id, source_id, target_id, relationship_type, weight, metadata 
              FROM relationships 
-             WHERE source_id = ?"
+             WHERE source_id = ?",
         )?;
 
         let rows = stmt.query_map([entity_id.as_str()], |row| {
@@ -897,20 +913,30 @@ impl Database {
             relationships.push(relationship);
         }
 
-        debug!("Loaded {} outgoing relationships for entity {}", relationships.len(), entity_id.as_str());
+        debug!(
+            "Loaded {} outgoing relationships for entity {}",
+            relationships.len(),
+            entity_id.as_str()
+        );
         Ok(relationships)
     }
-    
+
     /// Load relationships by relationship type
-    pub fn load_relationships_by_type(&self, rel_type: &RelationshipType) -> Result<Vec<Relationship>> {
-        debug!("Loading relationships of type {:?} from {}", rel_type, self.db_path);
+    pub fn load_relationships_by_type(
+        &self,
+        rel_type: &RelationshipType,
+    ) -> Result<Vec<Relationship>> {
+        debug!(
+            "Loading relationships of type {:?} from {}",
+            rel_type, self.db_path
+        );
 
         // Get a connection from the pool
         let conn = self.get_connection()?;
         let mut stmt = conn.prepare(
             "SELECT id, source_id, target_id, relationship_type, weight, metadata 
              FROM relationships 
-             WHERE relationship_type = ?"
+             WHERE relationship_type = ?",
         )?;
 
         let rows = stmt.query_map([rel_type.to_string()], |row| {
@@ -974,7 +1000,11 @@ impl Database {
             relationships.push(relationship);
         }
 
-        debug!("Loaded {} relationships of type {:?}", relationships.len(), rel_type);
+        debug!(
+            "Loaded {} relationships of type {:?}",
+            relationships.len(),
+            rel_type
+        );
         Ok(relationships)
     }
 
@@ -987,9 +1017,10 @@ impl Database {
                 return 0;
             }
         };
-        
-        let count: Result<i64, _> = conn.query_row("SELECT COUNT(*) FROM relationships", [], |row| row.get(0));
-        
+
+        let count: Result<i64, _> =
+            conn.query_row("SELECT COUNT(*) FROM relationships", [], |row| row.get(0));
+
         match count {
             Ok(c) => c as usize,
             Err(e) => {
@@ -1003,32 +1034,39 @@ impl Database {
     pub fn get_all_relationships(&self) -> Result<Vec<Relationship>> {
         self.load_relationships()
     }
-    
+
     /// Query entities based on entity type and optional condition
-    pub fn query_entities_by_type(&self, entity_type: &EntityType, condition: Option<&str>) -> Result<Vec<Box<dyn Entity>>> {
-        debug!("Querying entities of type {:?} from {}", entity_type, self.db_path);
-        
+    pub fn query_entities_by_type(
+        &self,
+        entity_type: &EntityType,
+        condition: Option<&str>,
+    ) -> Result<Vec<Box<dyn Entity>>> {
+        debug!(
+            "Querying entities of type {:?} from {}",
+            entity_type, self.db_path
+        );
+
         // Get a connection from the pool
         let conn = self.get_connection()?;
-        
+
         // Build the base query
         let mut sql = String::from(
             "SELECT id, name, entity_type, file_path, location, documentation, containing_entity, data 
              FROM entities 
              WHERE entity_type = ?"
         );
-        
+
         // Add condition if provided
         if let Some(cond) = condition {
             sql.push_str(" AND ");
             sql.push_str(cond);
         }
-        
+
         let mut stmt = conn.prepare(&sql)?;
-        
+
         // Convert entity type to string
         let entity_type_str = entity_type.to_string();
-        
+
         // Execute the query
         let rows = stmt.query_map([entity_type_str], |row| {
             let id: String = row.get(0)?;
@@ -1240,7 +1278,7 @@ impl Database {
         debug!("Query returned {} entities", entities.len());
         Ok(entities)
     }
-    
+
     /// Find paths between entities using recursive CTEs in SQLite
     pub fn find_paths(
         &self,
@@ -1249,31 +1287,32 @@ impl Database {
         target_entity_type: Option<&EntityType>,
         relationship_type: Option<&RelationshipType>,
         max_depth: usize,
-        direction: &str
+        direction: &str,
     ) -> Result<Vec<(EntityId, usize)>> {
         debug!(
             "Finding paths from {} with max depth {}",
-            from_id.as_str(), max_depth
+            from_id.as_str(),
+            max_depth
         );
 
         // Get a connection from the pool
         let conn = self.get_connection()?;
-        
+
         // Define direction condition based on parameter
         let direction_condition = match direction {
             "outbound" => "r.source_id = t.id",
             "inbound" => "r.target_id = t.id",
             _ => "(r.source_id = t.id OR r.target_id = t.id)", // both directions
         };
-        
+
         // Define relationship type filter if specified
         let rel_filter = relationship_type.map_or("".to_string(), |rt| {
             format!("AND r.relationship_type = '{}'", rt.to_string())
         });
-        
+
         // Define max depth filter
         let depth_filter = format!("AND t.depth < {}", max_depth);
-        
+
         // Define target filter (either specific ID or entity type)
         let target_filter = if let Some(target_id) = to_id {
             format!("WHERE e.id = '{}'", target_id.as_str())
@@ -1282,7 +1321,7 @@ impl Database {
         } else {
             "".to_string()
         };
-        
+
         // Build the CTE query for path finding
         let sql = format!(
             "WITH RECURSIVE traverse(id, depth) AS (
@@ -1302,16 +1341,16 @@ impl Database {
             ORDER BY t.depth",
             direction_condition, rel_filter, depth_filter, target_filter
         );
-        
+
         debug!("Executing path query: {}", sql);
-        
+
         let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map([from_id.as_str()], |row| {
             let id: String = row.get(0)?;
             let depth: i64 = row.get(1)?;
             Ok((EntityId::new(&id), depth as usize))
         })?;
-        
+
         let mut paths = Vec::new();
         for row_result in rows {
             match row_result {
@@ -1322,11 +1361,11 @@ impl Database {
                 }
             }
         }
-        
+
         debug!("Found {} paths from {}", paths.len(), from_id.as_str());
         Ok(paths)
     }
-    
+
     /// Save multiple entities and relationships in a single transaction
     pub fn save_all_in_transaction(
         &self,
