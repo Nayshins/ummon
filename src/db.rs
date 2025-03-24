@@ -931,7 +931,7 @@ impl Database {
 
         for (_, (field, value)) in conditions.iter().enumerate() {
             sql.push_str(&format!(" AND {} = ?", field));
-            params.push(value.as_str() as &dyn rusqlite::ToSql);
+            params.push(&value.as_str() as &dyn rusqlite::ToSql);
         }
 
         // Get a connection from the pool
