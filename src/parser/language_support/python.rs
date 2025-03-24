@@ -979,19 +979,19 @@ mod tests {
         // For now, just verify that it doesn't crash and returns empty results
         let functions = parser.parse_functions(invalid_code, "invalid.py")?;
         assert!(
-            functions.is_empty() || functions.len() > 0,
+            functions.is_empty() || !functions.is_empty(),
             "Parser should not crash on invalid content"
         );
 
         let types = parser.parse_types(invalid_code, "invalid.py")?;
         assert!(
-            types.is_empty() || types.len() > 0,
+            types.is_empty() || !types.is_empty(),
             "Parser should not crash on invalid content"
         );
 
         let calls = parser.parse_calls(invalid_code, "invalid.py")?;
         assert!(
-            calls.is_empty() || calls.len() > 0,
+            calls.is_empty() || !calls.is_empty(),
             "Parser should not crash on invalid content"
         );
 
@@ -1065,7 +1065,7 @@ mod tests {
             }
         }
 
-        assert!(results.len() > 0, "No class types found");
+        assert!(!results.is_empty(), "No class types found");
 
         if !results.is_empty() {
             let class_def = &results[0];

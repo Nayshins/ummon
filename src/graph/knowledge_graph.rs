@@ -85,7 +85,7 @@ impl KnowledgeGraph {
 
         let storage = match entity_type {
             EntityType::Function | EntityType::Method => {
-                if let Some(func) = (&*entity).as_any().downcast_ref::<FunctionEntity>() {
+                if let Some(func) = (*entity).as_any().downcast_ref::<FunctionEntity>() {
                     EntityStorage::Function(func.clone())
                 } else {
                     return Err(anyhow::anyhow!(
@@ -100,7 +100,7 @@ impl KnowledgeGraph {
             | EntityType::Struct
             | EntityType::Enum
             | EntityType::Type => {
-                if let Some(typ) = (&*entity).as_any().downcast_ref::<TypeEntity>() {
+                if let Some(typ) = (*entity).as_any().downcast_ref::<TypeEntity>() {
                     EntityStorage::Type(typ.clone())
                 } else {
                     return Err(anyhow::anyhow!(
@@ -110,7 +110,7 @@ impl KnowledgeGraph {
                 }
             }
             EntityType::Module | EntityType::File => {
-                if let Some(module) = (&*entity).as_any().downcast_ref::<ModuleEntity>() {
+                if let Some(module) = (*entity).as_any().downcast_ref::<ModuleEntity>() {
                     EntityStorage::Module(module.clone())
                 } else {
                     return Err(anyhow::anyhow!(
@@ -120,7 +120,7 @@ impl KnowledgeGraph {
                 }
             }
             EntityType::Variable | EntityType::Field | EntityType::Constant => {
-                if let Some(var) = (&*entity).as_any().downcast_ref::<VariableEntity>() {
+                if let Some(var) = (*entity).as_any().downcast_ref::<VariableEntity>() {
                     EntityStorage::Variable(var.clone())
                 } else {
                     return Err(anyhow::anyhow!(
@@ -130,7 +130,7 @@ impl KnowledgeGraph {
                 }
             }
             EntityType::DomainConcept => {
-                if let Some(domain) = (&*entity).as_any().downcast_ref::<DomainConceptEntity>() {
+                if let Some(domain) = (*entity).as_any().downcast_ref::<DomainConceptEntity>() {
                     EntityStorage::DomainConcept(domain.clone())
                 } else {
                     return Err(anyhow::anyhow!(
@@ -140,7 +140,7 @@ impl KnowledgeGraph {
                 }
             }
             _ => {
-                if let Some(base) = (&*entity).as_any().downcast_ref::<BaseEntity>() {
+                if let Some(base) = (*entity).as_any().downcast_ref::<BaseEntity>() {
                     EntityStorage::Base(base.clone())
                 } else {
                     return Err(anyhow::anyhow!(

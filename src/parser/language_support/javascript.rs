@@ -621,19 +621,19 @@ mod tests {
         // For now, just verify that it doesn't crash and returns empty results
         let functions = parser.parse_functions(invalid_code, "invalid.js")?;
         assert!(
-            functions.is_empty() || functions.len() > 0,
+            functions.is_empty() || !functions.is_empty(),
             "Parser should not crash on invalid content"
         );
 
         let types = parser.parse_types(invalid_code, "invalid.js")?;
         assert!(
-            types.is_empty() || types.len() > 0,
+            types.is_empty() || !types.is_empty(),
             "Parser should not crash on invalid content"
         );
 
         let calls = parser.parse_calls(invalid_code, "invalid.js")?;
         assert!(
-            calls.is_empty() || calls.len() > 0,
+            calls.is_empty() || !calls.is_empty(),
             "Parser should not crash on invalid content"
         );
 
