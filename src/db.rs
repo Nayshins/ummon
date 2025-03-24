@@ -924,7 +924,7 @@ impl Database {
 
         // Build the SQL query with conditions
         let mut sql = "SELECT id, name, entity_type, file_path, location, documentation, containing_entity, data FROM entities WHERE entity_type = ?".to_string();
-        
+
         // Create a binding for the entity_type string to extend its lifetime
         let entity_type_str = entity_type.to_string();
         let mut params: Vec<&dyn rusqlite::ToSql> = vec![&entity_type_str];
