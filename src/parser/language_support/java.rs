@@ -933,11 +933,11 @@ mod tests {
 
         // Test function parsing
         let functions = parser.parse_functions(java_code, "Test.java").unwrap();
-        assert!(functions.len() > 0);
+        assert!(!functions.is_empty());
 
         // Test types parsing
         let types = parser.parse_types(java_code, "Test.java").unwrap();
-        assert!(types.len() > 0);
+        assert!(!types.is_empty());
 
         // Basic module parsing
         let module = parser.parse_modules(java_code, "Test.java").unwrap();
@@ -996,25 +996,25 @@ mod tests {
         // For now, just verify that it doesn't crash and returns empty results
         let functions = parser.parse_functions(invalid_code, "invalid.java")?;
         assert!(
-            functions.is_empty() || functions.len() > 0,
+            functions.is_empty() || !functions.is_empty(),
             "Parser should not crash on invalid content"
         );
 
         let types = parser.parse_types(invalid_code, "invalid.java")?;
         assert!(
-            types.is_empty() || types.len() > 0,
+            types.is_empty() || !types.is_empty(),
             "Parser should not crash on invalid content"
         );
 
         let calls = parser.parse_calls(invalid_code, "invalid.java")?;
         assert!(
-            calls.is_empty() || calls.len() > 0,
+            calls.is_empty() || !calls.is_empty(),
             "Parser should not crash on invalid content"
         );
 
         let module = parser.parse_modules(invalid_code, "invalid.java")?;
         assert!(
-            module.imports.is_empty() || module.imports.len() > 0,
+            module.imports.is_empty() || !module.imports.is_empty(),
             "Parser should not crash on invalid content"
         );
 
@@ -1111,7 +1111,7 @@ mod tests {
             }
         }
 
-        assert!(types.len() > 0, "No class types found");
+        assert!(!types.is_empty(), "No class types found");
 
         if !types.is_empty() {
             let class_def = &types[0];

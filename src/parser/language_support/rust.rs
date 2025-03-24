@@ -1128,7 +1128,7 @@ mod tests {
             }
         }
 
-        assert!(types.len() > 0, "No struct types found");
+        assert!(!types.is_empty(), "No struct types found");
 
         if !types.is_empty() {
             let struct_def = &types[0];
@@ -1415,19 +1415,19 @@ mod tests {
         // For now, just verify that it doesn't crash and returns empty results
         let functions = parser.parse_functions(invalid_code, "invalid.rs")?;
         assert!(
-            functions.is_empty() || functions.len() > 0,
+            functions.is_empty() || !functions.is_empty(),
             "Parser should not crash on invalid content"
         );
 
         let types = parser.parse_types(invalid_code, "invalid.rs")?;
         assert!(
-            types.is_empty() || types.len() > 0,
+            types.is_empty() || !types.is_empty(),
             "Parser should not crash on invalid content"
         );
 
         let calls = parser.parse_calls(invalid_code, "invalid.rs")?;
         assert!(
-            calls.is_empty() || calls.len() > 0,
+            calls.is_empty() || !calls.is_empty(),
             "Parser should not crash on invalid content"
         );
 
