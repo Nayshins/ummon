@@ -28,29 +28,24 @@ impl<'a> DbQueryExecutor<'a> {
     fn execute_select(&self, query: &SelectQuery) -> Result<Vec<Box<dyn Entity>>> {
         let entity_type = &query.entity_type.entity_type;
 
-        // If we have conditions, convert them to SQL
         let sql_condition = match &query.conditions {
             Some(condition) => Some(self.condition_to_sql(condition)?),
             None => None,
         };
 
-        // Execute the query using the database's query_entities_by_type method
         self.db
             .query_entities_by_type(entity_type, sql_condition.as_deref())
     }
 
     /// Execute a traversal query using the database's find_paths method
     fn execute_traversal(&self, query: &TraversalQuery) -> Result<Vec<Box<dyn Entity>>> {
-        // Get all entities matching the source type
         let source_entities = self
             .db
             .query_entities_by_type(&query.source_type.entity_type, None)?;
 
         let mut result_entities = Vec::new();
 
-        // For each source entity, find paths based on relationship criteria
         for source_entity in source_entities {
-            // Configure traversal direction
             let direction = match query.relationship.relationship_type {
                 RelationshipType::Calls => "outbound",
                 RelationshipType::Contains => "outbound",
@@ -67,7 +62,6 @@ impl<'a> DbQueryExecutor<'a> {
                 RelationshipType::Other(_) => "both",
             };
 
-            // Find paths from this entity using database's find_paths method
             let paths = self.db.find_paths(
                 source_entity.id(),
                 None, // to_id is None because we're looking for any target of the correct type
@@ -77,16 +71,13 @@ impl<'a> DbQueryExecutor<'a> {
                 direction,
             )?;
 
-            // If paths were found, add the source entity to results
             if !paths.is_empty() {
-                // Apply conditions to target entities if conditions exist
                 if let Some(ref condition) = query.conditions {
                     let has_valid_target = self.check_traversal_targets(&paths, condition)?;
                     if has_valid_target {
                         result_entities.push(source_entity);
                     }
                 } else {
-                    // No conditions, so if any path exists, include the source entity
                     result_entities.push(source_entity);
                 }
             }
@@ -112,16 +103,11 @@ impl<'a> DbQueryExecutor<'a> {
             return Ok(false);
         }
 
-        // Load each target entity and check against condition
         for target_id in target_ids {
             if let Some(entity) = self.db.load_entity(target_id)? {
-                // Convert condition to SQL for efficient filtering
                 let sql_condition = self.condition_to_sql(condition)?;
-
-                // Extract entity type for SQL query
                 let entity_type = entity.entity_type();
-
-                // Use query_entities_by_type with condition to filter this specific entity
+                
                 let id_condition = format!("id = '{}'", target_id.as_str());
                 let combined_condition = format!("{} AND {}", id_condition, sql_condition);
 
@@ -195,7 +181,7 @@ impl<'a> DbQueryExecutor<'a> {
                 };
 
                 let sql_value = match value {
-                    Value::String(s) => format!("'{}'", s.replace('\'', "''")), // Escape single quotes
+                    Value::String(s) => format!("'{}'", s.replace('\'', "''")), // Escape single quotes for SQL safety
                     Value::Number(n) => n.to_string(),
                 };
 
