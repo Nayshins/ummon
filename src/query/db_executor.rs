@@ -107,7 +107,7 @@ impl<'a> DbQueryExecutor<'a> {
             if let Some(entity) = self.db.load_entity(target_id)? {
                 let sql_condition = self.condition_to_sql(condition)?;
                 let entity_type = entity.entity_type();
-                
+
                 let id_condition = format!("id = '{}'", target_id.as_str());
                 let combined_condition = format!("{} AND {}", id_condition, sql_condition);
 
