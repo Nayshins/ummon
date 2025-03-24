@@ -1,12 +1,11 @@
 use anyhow::{anyhow, Result};
-use std::f64;
 
 use crate::db::Database;
-use crate::graph::entity::{Entity, EntityId, EntityType};
+use crate::graph::entity::{Entity, EntityId};
 use crate::graph::relationship::RelationshipType;
 
 use super::parser::{
-    ConditionNode, EntityTypeSelector, Operator, QueryType, SelectQuery, TraversalQuery, Value,
+    ConditionNode, Operator, QueryType, SelectQuery, TraversalQuery, Value,
 };
 
 /// Executes a parsed query against the SQLite database directly
@@ -159,7 +158,7 @@ impl<'a> DbQueryExecutor<'a> {
                 Ok(format!("NOT ({})", inner_sql))
             }
             ConditionNode::HasAttribute(attr) => {
-                match *attr {
+                match attr.as_str() {
                     "name" => Ok("name IS NOT NULL AND name != ''".to_string()),
                     "file_path" | "path" => Ok("file_path IS NOT NULL".to_string()),
                     "documentation" => Ok("documentation IS NOT NULL".to_string()),
@@ -173,7 +172,7 @@ impl<'a> DbQueryExecutor<'a> {
                 operator,
                 value,
             } => {
-                let attr_name = match *attribute {
+                let attr_name = match attribute.as_str() {
                     "name" => "name",
                     "file_path" | "path" => "file_path",
                     "documentation" => "documentation",
