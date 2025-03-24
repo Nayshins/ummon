@@ -927,11 +927,20 @@ impl Database {
 
         // Create a binding for the entity_type string to extend its lifetime
         let entity_type_str = entity_type.to_string();
-        let mut params: Vec<&dyn rusqlite::ToSql> = vec![&entity_type_str];
+        
+        // Create a vector to store all the condition values as owned strings
+        let mut values_storage = Vec::with_capacity(conditions.len() + 1);
+        values_storage.push(entity_type_str);
+        
+        // Create the params vector with reference to our first stored value
+        let mut params: Vec<&dyn rusqlite::ToSql> = vec![&values_storage[0]];
 
         for (_, (field, value)) in conditions.iter().enumerate() {
             sql.push_str(&format!(" AND {} = ?", field));
-            params.push(&value.as_str() as &dyn rusqlite::ToSql);
+            // Store the value as an owned string in our storage vector
+            values_storage.push(value.clone());
+            // Now we can safely push a reference to our stored value
+            params.push(&values_storage[values_storage.len()-1] as &dyn rusqlite::ToSql);
         }
 
         // Get a connection from the pool
