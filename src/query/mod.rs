@@ -1,8 +1,10 @@
+mod db_executor;
 mod executor;
 mod formatter;
 mod nl_translator;
 mod parser;
 
+pub use db_executor::DbQueryExecutor;
 pub use executor::QueryExecutor;
 pub use formatter::{OutputFormat, ResultFormatter};
 pub use nl_translator::NaturalLanguageTranslator;
@@ -51,6 +53,46 @@ pub async fn process_query(
     formatter.format(results)
 }
 
+/// Process a query directly using the database without loading everything into memory
+pub async fn process_query_with_db(
+    db: &crate::db::Database,
+    query_str: &str,
+    format_str: &str,
+    natural: bool,
+    llm_provider: Option<&str>,
+    llm_model: Option<&str>,
+) -> Result<String> {
+    // Set up the formatter with SQLite mode (modified formatter that handles boxed entities)
+    let format = format_str.parse().unwrap_or(OutputFormat::Text);
+    let formatter = ResultFormatter::new_for_boxed_entities(format);
+
+    // If natural language is enabled, translate query first
+    let query_to_execute = if natural {
+        let config = get_llm_config(llm_provider, llm_model);
+        let translator = NaturalLanguageTranslator::new(config);
+        let (translated, confidence) = translator.translate(query_str).await?;
+
+        // Print the translation information
+        eprintln!("Translated query: {}", translated);
+        eprintln!("Translation confidence: {:.2}", confidence);
+
+        // Return the translated query
+        translated
+    } else {
+        query_str.to_string()
+    };
+
+    // Parse the query
+    let parsed_query = parse_query(&query_to_execute)?;
+
+    // Execute the query directly with the database
+    let executor = DbQueryExecutor::new(db);
+    let results = executor.execute(parsed_query)?;
+
+    // Format and return the results
+    formatter.format_boxed_entities(&results)
+}
+
 /// Options for refining query execution and output
 pub struct QueryOptions {
     pub format: String,
@@ -74,27 +116,12 @@ impl Default for QueryOptions {
 
 /// Convenience function to execute a query with options
 pub async fn execute_query(query_str: &str, options: QueryOptions) -> Result<String> {
-    // Load the knowledge graph from database
+    // Connect to the database
     let db = crate::db::get_database("ummon.db")?;
-    let mut kg = KnowledgeGraph::new();
 
-    // Load entities from database
-    let entities = db.load_entities()?;
-    for entity in entities {
-        if let Err(e) = kg.add_boxed_entity(entity) {
-            tracing::warn!("Failed to add entity to knowledge graph: {}", e);
-        }
-    }
-
-    // Load relationships from database
-    let relationships = db.load_relationships()?;
-    for relationship in relationships {
-        kg.add_relationship(relationship);
-    }
-
-    // Process the query
-    let result = process_query(
-        &kg,
+    // Use the direct database query approach
+    let result = process_query_with_db(
+        &db,
         query_str,
         &options.format,
         options.natural,
