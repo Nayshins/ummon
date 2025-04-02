@@ -1,6 +1,8 @@
 use anyhow::Result;
+use chrono::prelude::*;
 use ignore::WalkBuilder;
 use std::collections::{HashMap, HashSet};
+use std::path::Path;
 use std::time::Instant;
 
 use crate::graph::entity::{
@@ -18,6 +20,7 @@ use crate::parser::language_support::{
 /// Main entry point for the indexing command
 pub async fn run(
     path: &str,
+    full_rebuild: bool,
     enable_domain_extraction: bool,
     domain_dir: &str,
     llm_provider: Option<&str>,
@@ -35,38 +38,81 @@ pub async fn run(
         std::env::set_var("LLM_MODEL", model);
     }
 
-    let mut kg = KnowledgeGraph::new();
+    let db = crate::db::get_database("ummon.db")?;
+    let mut kg = KnowledgeGraph::new_with_db(db.clone());
+
     let mut function_map: HashMap<String, FunctionDefinition> = HashMap::new();
     let mut type_map: HashMap<String, TypeDefinition> = HashMap::new();
     let mut domain_concepts: HashMap<String, DomainConcept> = HashMap::new();
-
-    // Track seen file paths to avoid duplicates
     let mut indexed_files = HashSet::new();
 
-    // First pass: Collect entities
+    if full_rebuild {
+        tracing::info!("Performing full rebuild of the knowledge graph...");
+        kg.purge()?;
+    } else {
+        tracing::info!("Performing incremental update of the knowledge graph...");
+        let last_index_time = db.get_metadata("last_index_time")?;
+
+        if let Some(timestamp) = last_index_time {
+            let modified_files = get_modified_files(path, &timestamp)?;
+
+            if modified_files.is_empty() {
+                tracing::info!("No files modified since last index. Nothing to do.");
+                return Ok(());
+            }
+
+            tracing::info!("Found {} modified files to update", modified_files.len());
+            kg.prune(&modified_files)?;
+
+            for file in modified_files {
+                indexed_files.insert(file);
+            }
+        } else {
+            tracing::info!("No previous index found, performing full initial index.");
+        }
+    }
+
     tracing::info!("Pass 1: Collecting entities...");
-    index_entities(
-        path,
-        &mut kg,
-        &mut function_map,
-        &mut type_map,
-        &mut domain_concepts,
-        &mut indexed_files,
-    )?;
+    if indexed_files.is_empty() {
+        index_entities(
+            path,
+            &mut kg,
+            &mut function_map,
+            &mut type_map,
+            &mut domain_concepts,
+            &mut indexed_files,
+        )?;
+    } else {
+        index_specific_entities(
+            &indexed_files,
+            &mut kg,
+            &mut function_map,
+            &mut type_map,
+            &mut domain_concepts,
+        )?;
+    }
 
-    // Second pass: Build relationships
     tracing::info!("Pass 2: Building relationships...");
-    index_relationships(
-        path,
-        &mut kg,
-        &function_map,
-        &type_map,
-        &domain_concepts,
-        &indexed_files,
-    )?;
+    if indexed_files.is_empty() {
+        index_relationships(
+            path,
+            &mut kg,
+            &function_map,
+            &type_map,
+            &domain_concepts,
+            &indexed_files,
+        )?;
+    } else {
+        index_specific_relationships(
+            &indexed_files,
+            &mut kg,
+            &function_map,
+            &type_map,
+            &domain_concepts,
+        )?;
+    }
 
-    // Third pass: Infer domain concepts and their relationships
-    tracing::info!("Pass 3: Inferring domain model from all source files...");
+    tracing::info!("Pass 3: Inferring domain model from source files...");
     infer_domain_model(
         &mut kg,
         &mut domain_concepts,
@@ -77,19 +123,15 @@ pub async fn run(
 
     let duration = start_time.elapsed();
 
-    // Save to SQLite database
-    tracing::info!("Saving knowledge graph to database...");
-    let db = crate::db::get_database("ummon.db")?;
-
-    // Prepare entities and relationships for saving
     let entities: Vec<&dyn Entity> = kg.get_all_entities();
     let relationships = kg.get_all_relationships()?;
     let rel_refs: Vec<&Relationship> = relationships.iter().collect();
 
-    // Save all data in one transaction
     db.save_all_in_transaction(&entities, &rel_refs)?;
 
-    // Print indexing statistics
+    let now = Utc::now().to_rfc3339();
+    db.set_metadata("last_index_time", &now)?;
+
     let entity_count = kg.get_all_entities().len();
     let relationship_count = kg.get_relationship_count();
     let domain_concept_count = kg.get_domain_concepts().len();
@@ -419,6 +461,311 @@ fn index_relationships(
             // Process the module's imports
             let module_id = EntityId::new(&file_path);
             let module_info = parser.parse_modules(&content, &file_path)?;
+
+            for import in &module_info.imports {
+                let imported_module_id = EntityId::new(&import.module_name);
+                if let Err(e) = kg.create_relationship(
+                    module_id.clone(),
+                    imported_module_id,
+                    RelationshipType::Imports,
+                ) {
+                    tracing::warn!("Failed to create imports relationship: error: {}", e);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Get files that have been modified since the last indexing
+fn get_modified_files(path: &str, last_index_time: &str) -> Result<Vec<String>> {
+    let last_index_datetime = DateTime::parse_from_rfc3339(last_index_time)
+        .map_err(|e| anyhow::anyhow!("Failed to parse last index time: {}", e))?;
+
+    let last_index_utc = last_index_datetime.with_timezone(&Utc);
+    let walker = WalkBuilder::new(path).hidden(false).ignore(true).build();
+    let mut modified_files = Vec::new();
+
+    for entry in walker {
+        let entry = entry?;
+        let path = entry.path();
+
+        if !path.is_file() || !is_supported_source_file(path) {
+            continue;
+        }
+
+        if let Ok(metadata) = std::fs::metadata(path) {
+            if let Ok(modified) = metadata.modified() {
+                let modified_time = DateTime::<Utc>::from(modified);
+
+                if modified_time > last_index_utc {
+                    modified_files.push(path.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+
+    Ok(modified_files)
+}
+
+/// Index entities from a specific set of files
+fn index_specific_entities(
+    file_paths: &HashSet<String>,
+    kg: &mut KnowledgeGraph,
+    function_map: &mut HashMap<String, FunctionDefinition>,
+    type_map: &mut HashMap<String, TypeDefinition>,
+    domain_concepts: &mut HashMap<String, DomainConcept>,
+) -> Result<()> {
+    for file_path in file_paths {
+        let path = Path::new(file_path);
+
+        if !path.is_file() || !is_supported_source_file(path) {
+            continue;
+        }
+
+        if let Ok(Some(mut parser)) = get_parser_for_file(path) {
+            let content = std::fs::read_to_string(path)?;
+
+            let module_info = parser.parse_modules(&content, file_path)?;
+            let module_id = EntityId::new(file_path);
+
+            let module_entity = ModuleEntity {
+                base: BaseEntity::new(
+                    module_id.clone(),
+                    module_info.name.clone(),
+                    EntityType::Module,
+                    Some(file_path.clone()),
+                ),
+                path: file_path.clone(),
+                children: Vec::new(),
+                imports: module_info
+                    .imports
+                    .iter()
+                    .map(|imp| imp.module_name.clone())
+                    .collect(),
+            };
+
+            kg.add_entity(module_entity)?;
+
+            let functions = parser.parse_functions(&content, file_path)?;
+            for func in functions {
+                let key = format!("{}::{}", func.file_path, func.name);
+                function_map.insert(key.clone(), func.clone());
+
+                let entity_id = EntityId::new(&key);
+                let entity_type = match func.kind {
+                    crate::parser::language_support::FunctionKind::Function => EntityType::Function,
+                    crate::parser::language_support::FunctionKind::Method => EntityType::Method,
+                    crate::parser::language_support::FunctionKind::Constructor => {
+                        EntityType::Method
+                    }
+                    _ => EntityType::Function,
+                };
+
+                let doc = parser.extract_documentation(&content, &func.location)?;
+
+                let mut base = BaseEntity::new(
+                    entity_id.clone(),
+                    func.name.clone(),
+                    entity_type,
+                    Some(func.file_path.clone()),
+                );
+
+                base.location = Some(func.location.clone());
+                base.documentation = doc;
+                base.containing_entity = func
+                    .containing_type
+                    .as_ref()
+                    .map(|t| EntityId::new(&format!("type::{}", t)));
+
+                let function_entity = FunctionEntity {
+                    base,
+                    parameters: func.parameters.clone(),
+                    return_type: None,
+                    visibility: func.visibility.clone(),
+                    is_async: false,
+                    is_static: false,
+                    is_constructor: func.kind
+                        == crate::parser::language_support::FunctionKind::Constructor,
+                    is_abstract: false,
+                };
+
+                kg.add_entity(function_entity)?;
+            }
+
+            let types = parser.parse_types(&content, file_path)?;
+            for type_def in types {
+                let key = format!("{}::{}", type_def.file_path, type_def.name);
+                type_map.insert(key.clone(), type_def.clone());
+
+                let entity_id = EntityId::new(&format!("type::{}", key));
+                let entity_type = match type_def.kind {
+                    crate::parser::language_support::TypeKind::Class => EntityType::Class,
+                    crate::parser::language_support::TypeKind::Struct => EntityType::Struct,
+                    crate::parser::language_support::TypeKind::Interface => EntityType::Interface,
+                    crate::parser::language_support::TypeKind::Trait => EntityType::Trait,
+                    crate::parser::language_support::TypeKind::Enum => EntityType::Enum,
+                    _ => EntityType::Type,
+                };
+
+                let mut base = BaseEntity::new(
+                    entity_id.clone(),
+                    type_def.name.clone(),
+                    entity_type,
+                    Some(type_def.file_path.clone()),
+                );
+
+                base.location = Some(type_def.location.clone());
+                base.documentation = type_def.documentation.clone();
+
+                let type_entity = TypeEntity {
+                    base,
+                    fields: type_def
+                        .fields
+                        .iter()
+                        .map(|f| EntityId::new(&format!("field::{}::{}", key, f.name)))
+                        .collect(),
+                    methods: type_def
+                        .methods
+                        .iter()
+                        .map(|m| EntityId::new(&format!("method::{}::{}", key, m)))
+                        .collect(),
+                    supertypes: type_def
+                        .super_types
+                        .iter()
+                        .map(|s| EntityId::new(&format!("type::{}", s)))
+                        .collect(),
+                    visibility: type_def.visibility.clone(),
+                    is_abstract: false,
+                };
+
+                kg.add_entity(type_entity)?;
+
+                for field in &type_def.fields {
+                    let field_id = EntityId::new(&format!("{}::field::{}", key, field.name));
+
+                    let mut base = BaseEntity::new(
+                        field_id.clone(),
+                        field.name.clone(),
+                        EntityType::Field,
+                        Some(type_def.file_path.clone()),
+                    );
+
+                    base.location = Some(field.location.clone());
+                    base.containing_entity = Some(entity_id.clone());
+
+                    let var_entity = VariableEntity {
+                        base,
+                        type_annotation: field.type_annotation.clone(),
+                        visibility: field.visibility.clone(),
+                        is_const: false,
+                        is_static: field.is_static,
+                    };
+
+                    kg.add_entity(var_entity)?;
+                }
+            }
+
+            let concepts = parser.infer_domain_concepts(&content, file_path)?;
+            for concept in concepts {
+                domain_concepts.insert(concept.name.clone(), concept);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Build relationships between entities for specific files
+fn index_specific_relationships(
+    file_paths: &HashSet<String>,
+    kg: &mut KnowledgeGraph,
+    _function_map: &HashMap<String, FunctionDefinition>,
+    type_map: &HashMap<String, TypeDefinition>,
+    _domain_concepts: &HashMap<String, DomainConcept>,
+) -> Result<()> {
+    for file_path in file_paths {
+        let path = Path::new(file_path);
+
+        if !path.is_file() || !is_supported_source_file(path) {
+            continue;
+        }
+
+        if let Ok(Some(mut parser)) = get_parser_for_file(path) {
+            let content = std::fs::read_to_string(path)?;
+
+            let calls = parser.parse_calls(&content, file_path)?;
+            for call in calls {
+                let caller_id = EntityId::new(&format!("{}::{}", file_path, call.callee_name));
+
+                if let Some(callee_key) = &call.fully_qualified_name {
+                    let callee_id = EntityId::new(callee_key);
+
+                    if let Err(e) =
+                        kg.create_relationship(caller_id, callee_id, RelationshipType::Calls)
+                    {
+                        tracing::warn!("Failed to create call relationship: error: {}", e);
+                    }
+                }
+            }
+
+            for (key, type_def) in type_map {
+                if type_def.file_path == *file_path {
+                    let type_id = EntityId::new(key);
+
+                    for super_type in &type_def.super_types {
+                        let super_id = EntityId::new(super_type);
+
+                        let rel_type = match type_def.kind {
+                            crate::parser::language_support::TypeKind::Class
+                            | crate::parser::language_support::TypeKind::Struct => {
+                                RelationshipType::Inherits
+                            }
+                            _ => RelationshipType::Implements,
+                        };
+
+                        if let Err(e) = kg.create_relationship(type_id.clone(), super_id, rel_type)
+                        {
+                            tracing::warn!(
+                                "Failed to create inheritance relationship: error: {}",
+                                e
+                            );
+                        }
+                    }
+
+                    for method in &type_def.methods {
+                        let method_id = EntityId::new(&format!("{}::{}", key, method));
+                        if let Err(e) = kg.create_relationship(
+                            type_id.clone(),
+                            method_id,
+                            RelationshipType::Contains,
+                        ) {
+                            tracing::warn!(
+                                "Failed to create contains relationship (method): error: {}",
+                                e
+                            );
+                        }
+                    }
+
+                    for field in &type_def.fields {
+                        let field_id = EntityId::new(&format!("{}::field::{}", key, field.name));
+                        if let Err(e) = kg.create_relationship(
+                            type_id.clone(),
+                            field_id,
+                            RelationshipType::Contains,
+                        ) {
+                            tracing::warn!(
+                                "Failed to create contains relationship (field): error: {}",
+                                e
+                            );
+                        }
+                    }
+                }
+            }
+
+            let module_id = EntityId::new(file_path);
+            let module_info = parser.parse_modules(&content, file_path)?;
 
             for import in &module_info.imports {
                 let imported_module_id = EntityId::new(&import.module_name);

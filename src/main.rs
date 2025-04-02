@@ -26,6 +26,7 @@ async fn main() -> Result<()> {
     match cli.command {
         cli::Commands::Index {
             path,
+            full,
             enable_domain_extraction,
             domain_dir,
             llm_provider,
@@ -33,6 +34,7 @@ async fn main() -> Result<()> {
         } => {
             commands::index::run(
                 &path,
+                full,
                 enable_domain_extraction,
                 &domain_dir,
                 llm_provider.as_deref(),

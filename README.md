@@ -23,6 +23,8 @@ Named after the AI Ummon from Dan Simmons' Hyperion Cantos, this project provide
    - Indexes code to create a semantic representation
    - Maps relationships between code entities (calls, imports, dependencies)
    - Works with multiple languages (Rust, Python, JavaScript, Java)
+   - Supports both incremental updates and full rebuilds
+   - Tracks file modifications to minimize reprocessing
 
 2. **Advanced Querying System**
    - Query your codebase using a powerful structured query language or natural language
@@ -49,8 +51,11 @@ cargo install ummon
 ## Usage
 
 ```bash
-# Index a codebase
+# Index a codebase (performs incremental update by default)
 ummon index /path/to/codebase
+
+# Perform a full rebuild of the knowledge graph
+ummon index /path/to/codebase --full
 
 # Index with domain model extraction enabled
 ummon index /path/to/codebase --enable-domain-extraction
@@ -101,6 +106,8 @@ All other configuration is handled through command-line flags.
 Ummon is built with a modular architecture:
 - Language-specific parsers for code analysis
 - Graph-based storage for entities and relationships
+- SQLite database with metadata tracking for efficient updates
+- Intelligent update mechanisms for incremental indexing
 - LLM integration for semantic understanding
 - Command-line interface for user interaction
 
@@ -122,6 +129,24 @@ The Java parser supports parsing of:
 - Documentation comments extraction
 - Method calls and relationships
 
+## Knowledge Graph Updates
+
+Ummon provides two approaches to updating the knowledge graph:
+
+### Incremental Updates (Default)
+When run without the `--full` flag, Ummon will perform an incremental update:
+- Tracks the timestamp of the last indexing operation
+- Detects files modified since the last index using file modification times
+- Removes only the entities and relationships associated with modified files
+- Reindexes only the modified files, preserving the rest of the graph
+- Significantly faster for large codebases with small changes
+
+### Full Rebuilds
+When run with the `--full` flag, Ummon will perform a complete rebuild:
+- Purges all entities and relationships from the database
+- Reindexes the entire codebase from scratch
+- Useful after major changes or when the graph might be in an inconsistent state
+
 ## Development
 
 ### Build & Test Commands
@@ -133,8 +158,9 @@ cargo build
 cargo run
 
 # Run with specific command
-cargo run -- index .      # Index current directory
-cargo run -- query "show funcs"  # Query the knowledge graph
+cargo run -- index .              # Incremental index of current directory
+cargo run -- index . --full       # Full rebuild of the knowledge graph
+cargo run -- query "show funcs"   # Query the knowledge graph
 
 # Run tests
 cargo test

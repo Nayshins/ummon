@@ -109,6 +109,11 @@ impl Database {
                 FOREIGN KEY(target_id) REFERENCES entities(id)
             );
             
+            CREATE TABLE IF NOT EXISTS metadata (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            );
+            
             CREATE INDEX IF NOT EXISTS idx_entity_name ON entities(name);
             CREATE INDEX IF NOT EXISTS idx_entity_type ON entities(entity_type);
             CREATE INDEX IF NOT EXISTS idx_entity_file_path ON entities(file_path);
@@ -1033,6 +1038,104 @@ impl Database {
     /// Get all relationships directly from the database
     pub fn get_all_relationships(&self) -> Result<Vec<Relationship>> {
         self.load_relationships()
+    }
+
+    /// Get a metadata value by key
+    pub fn get_metadata(&self, key: &str) -> Result<Option<String>> {
+        let conn = self.get_connection()?;
+        let mut stmt = conn.prepare("SELECT value FROM metadata WHERE key = ?")?;
+        let mut rows = stmt.query([key])?;
+
+        if let Some(row) = rows.next()? {
+            Ok(Some(row.get(0)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Set a metadata value by key
+    pub fn set_metadata(&self, key: &str, value: &str) -> Result<()> {
+        let conn = self.get_connection()?;
+        conn.execute(
+            "INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)",
+            [key, value],
+        )?;
+        Ok(())
+    }
+
+    /// Remove entities and relationships associated with specified files
+    pub fn remove_entities_and_relationships_by_files(&self, file_paths: &[String]) -> Result<()> {
+        if file_paths.is_empty() {
+            return Ok(());
+        }
+
+        let mut conn = self.get_connection()?;
+        let tx = conn.transaction()?;
+
+        // Create placeholders for the IN clause
+        let placeholders = file_paths.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+
+        // Get entity IDs from the specified file paths
+        let sql = format!(
+            "SELECT id FROM entities WHERE file_path IN ({})",
+            placeholders
+        );
+        let entity_ids: Vec<String> = {
+            let mut stmt = tx.prepare(&sql)?;
+            let rows = stmt.query_map(rusqlite::params_from_iter(file_paths.iter()), |row| {
+                row.get::<_, String>(0)
+            })?;
+            let ids: Vec<String> = rows.filter_map(|r| r.ok()).collect();
+            ids
+        };
+
+        // Delete relationships involving these entities if any entities were found
+        if !entity_ids.is_empty() {
+            let rel_placeholders = entity_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+
+            let rel_sql = format!(
+                "DELETE FROM relationships WHERE source_id IN ({0}) OR target_id IN ({0})",
+                rel_placeholders
+            );
+
+            // Combine parameters for source_id and target_id
+            let mut params: Vec<&str> = Vec::with_capacity(entity_ids.len() * 2);
+            for id in &entity_ids {
+                params.push(id.as_str());
+            }
+            for id in &entity_ids {
+                params.push(id.as_str());
+            }
+
+            tx.execute(&rel_sql, rusqlite::params_from_iter(params.iter()))?;
+        }
+
+        // Delete the entities
+        let entity_sql = format!("DELETE FROM entities WHERE file_path IN ({})", placeholders);
+        tx.execute(&entity_sql, rusqlite::params_from_iter(file_paths.iter()))?;
+
+        tx.commit()?;
+        debug!(
+            "Removed entities and relationships for {} files",
+            file_paths.len()
+        );
+        Ok(())
+    }
+
+    /// Purge all entities and relationships from the graph
+    pub fn purge_graph(&self) -> Result<()> {
+        let mut conn = self.get_connection()?;
+        let tx = conn.transaction()?;
+
+        // Delete all relationships first (due to foreign key constraints)
+        tx.execute("DELETE FROM relationships", [])?;
+
+        // Delete all entities
+        tx.execute("DELETE FROM entities", [])?;
+
+        tx.commit()?;
+        debug!("Purged all entities and relationships from the graph");
+        Ok(())
     }
 
     /// Query entities based on entity type and optional condition
