@@ -54,10 +54,10 @@ Return ONLY the JSON array without any explanation or other text."#,
     );
 
     let response = query_llm(&prompt, &llm_config).await?;
-    
+
     // Clean up the response to ensure proper JSON format
     let cleaned_response = response.trim().trim_matches(|c| c == '`' || c == '"');
-    
+
     match serde_json::from_str::<Vec<String>>(cleaned_response) {
         Ok(keywords) => Ok(keywords),
         Err(e) => {
@@ -82,20 +82,21 @@ Return ONLY the JSON array without any explanation or other text."#,
 fn extract_keywords_fallback(response: &str) -> Vec<String> {
     // Try to extract terms that look like they could be keywords
     let mut keywords = Vec::new();
-    
+
     // Remove any markdown code block formatting
     let cleaned = response
         .trim_start_matches("```json")
         .trim_start_matches("```")
         .trim_end_matches("```")
         .trim();
-    
+
     // Extract anything that looks like an array item
     for line in cleaned.lines() {
         let line = line.trim();
-        
+
         // Look for strings in quotes with commas (typical array pattern)
-        if let Some(quoted) = line.trim_start_matches('[')
+        if let Some(quoted) = line
+            .trim_start_matches('[')
             .trim_end_matches(']')
             .trim_end_matches(',')
             .trim()
@@ -105,7 +106,7 @@ fn extract_keywords_fallback(response: &str) -> Vec<String> {
             keywords.push(quoted.to_string());
         }
     }
-    
+
     keywords
 }
 
@@ -113,33 +114,36 @@ fn extract_keywords_fallback(response: &str) -> Vec<String> {
 fn search_seed_entities(db: &Database, keywords: &[String]) -> Result<Vec<(Box<dyn Entity>, f32)>> {
     let mut seed_entities = Vec::new();
     let entity_types = vec![
-        EntityType::Function, 
-        EntityType::Method, 
-        EntityType::Class, 
+        EntityType::Function,
+        EntityType::Method,
+        EntityType::Class,
         EntityType::Module,
-        EntityType::Variable, 
-        EntityType::Constant, 
-        EntityType::DomainConcept
+        EntityType::Variable,
+        EntityType::Constant,
+        EntityType::DomainConcept,
     ];
 
     for entity_type in entity_types {
         // Build condition for keyword matching
-        let conditions: Vec<String> = keywords.iter()
-            .flat_map(|kw| vec![
-                format!("name LIKE '%{}%'", kw.replace('\'', "''")),
-                format!("file_path LIKE '%{}%'", kw.replace('\'', "''")),
-                format!("documentation LIKE '%{}%'", kw.replace('\'', "''"))
-            ])
+        let conditions: Vec<String> = keywords
+            .iter()
+            .flat_map(|kw| {
+                vec![
+                    format!("name LIKE '%{}%'", kw.replace('\'', "''")),
+                    format!("file_path LIKE '%{}%'", kw.replace('\'', "''")),
+                    format!("documentation LIKE '%{}%'", kw.replace('\'', "''")),
+                ]
+            })
             .collect();
-        
+
         if conditions.is_empty() {
             continue;
         }
-        
+
         let condition = conditions.join(" OR ");
-        
+
         let entities = db.query_entities_by_type(&entity_type, Some(&condition))?;
-        
+
         // Assign initial score based on keyword matches
         for entity in entities {
             let mut score = 0.0;
@@ -147,20 +151,24 @@ fn search_seed_entities(db: &Database, keywords: &[String]) -> Result<Vec<(Box<d
                 "{} {} {}",
                 entity.name(),
                 entity.file_path().unwrap_or(&String::new()),
-                entity.metadata().get("documentation").unwrap_or(&String::new())
-            ).to_lowercase();
-            
+                entity
+                    .metadata()
+                    .get("documentation")
+                    .unwrap_or(&String::new())
+            )
+            .to_lowercase();
+
             for kw in keywords {
                 if entity_str.contains(&kw.to_lowercase()) {
                     score += 1.0;
-                    
+
                     // Boost score for name matches (most significant)
                     if entity.name().to_lowercase().contains(&kw.to_lowercase()) {
                         score += 2.0;
                     }
                 }
             }
-            
+
             // Only include if score is positive
             if score > 0.0 {
                 seed_entities.push((entity, score));
@@ -174,11 +182,11 @@ fn search_seed_entities(db: &Database, keywords: &[String]) -> Result<Vec<(Box<d
 /// Expand context via relationship traversal
 fn expand_context(
     db: &Database,
-    seed_entities: &[(Box<dyn Entity>, f32)]
+    seed_entities: &[(Box<dyn Entity>, f32)],
 ) -> Result<Vec<(Box<dyn Entity>, f32)>> {
     let mut all_entities: Vec<(Box<dyn Entity>, f32)> = Vec::new();
     let mut seen_ids = std::collections::HashSet::new();
-    
+
     let relationship_types = vec![
         RelationshipType::Calls,
         RelationshipType::Contains,
@@ -186,7 +194,7 @@ fn expand_context(
         RelationshipType::References,
         RelationshipType::RepresentedBy,
     ];
-    
+
     let max_depth = 2;
 
     // Add seed entities first
@@ -210,9 +218,10 @@ fn expand_context(
             )?;
 
             for (entity_id, depth) in paths {
-                if depth > 0 && !seen_ids.contains(&entity_id) { // Exclude the seed entity itself
+                if depth > 0 && !seen_ids.contains(&entity_id) {
+                    // Exclude the seed entity itself
                     seen_ids.insert(entity_id.clone());
-                    
+
                     if let Some(entity) = db.load_entity(&entity_id)? {
                         // Score based on proximity (decreases with depth)
                         let proximity_score = seed_score * (1.0 / (depth as f32 + 1.0));
@@ -229,7 +238,7 @@ fn expand_context(
 /// Rank entities using a hybrid scoring approach
 fn rank_entities(
     db: &Database,
-    entities: Vec<(Box<dyn Entity>, f32)>
+    entities: Vec<(Box<dyn Entity>, f32)>,
 ) -> Result<Vec<(Box<dyn Entity>, f32)>> {
     let mut ranked_entities = Vec::new();
     let entity_ids: Vec<EntityId> = entities.iter().map(|(e, _)| e.id().clone()).collect();
@@ -238,7 +247,8 @@ fn rank_entities(
     let mut centrality_scores = std::collections::HashMap::new();
     for entity_id in &entity_ids {
         let rels = db.load_relationships_for_entity(entity_id)?;
-        let degree = rels.iter()
+        let degree = rels
+            .iter()
             .filter(|r| entity_ids.contains(&r.source_id) || entity_ids.contains(&r.target_id))
             .count() as f32;
         centrality_scores.insert(entity_id.clone(), degree);
@@ -248,13 +258,22 @@ fn rank_entities(
     let max_centrality = centrality_scores.values().cloned().fold(0.0, f32::max);
     let normalized_centrality: std::collections::HashMap<_, _> = centrality_scores
         .into_iter()
-        .map(|(id, score)| (id, if max_centrality > 0.0 { score / max_centrality } else { 0.0 }))
+        .map(|(id, score)| {
+            (
+                id,
+                if max_centrality > 0.0 {
+                    score / max_centrality
+                } else {
+                    0.0
+                },
+            )
+        })
         .collect();
 
     // Combine proximity and centrality scores
     for (entity, proximity_score) in entities {
         let centrality = normalized_centrality.get(entity.id()).unwrap_or(&0.0);
-        
+
         // Weighted combination: 70% proximity, 30% centrality
         let final_score = proximity_score * 0.7 + centrality * 0.3;
         ranked_entities.push((entity, final_score));
@@ -267,13 +286,16 @@ fn rank_entities(
 
 /// Aggregate entity scores into file-level scores
 fn aggregate_and_rank_files(entities: Vec<(Box<dyn Entity>, f32)>) -> Result<Vec<RelevantFile>> {
-    let mut file_map: std::collections::HashMap<String, (f32, Vec<EntityId>)> = std::collections::HashMap::new();
+    let mut file_map: std::collections::HashMap<String, (f32, Vec<EntityId>)> =
+        std::collections::HashMap::new();
 
     // Aggregate entities by file
     for (entity, score) in entities {
         if let Some(file_path) = entity.file_path() {
-            let entry = file_map.entry(file_path.to_string()).or_insert((0.0, Vec::new()));
-            
+            let entry = file_map
+                .entry(file_path.to_string())
+                .or_insert((0.0, Vec::new()));
+
             // Use maximum entity score as the file's score
             entry.0 = entry.0.max(score);
             entry.1.push(entity.id().clone());
@@ -291,13 +313,17 @@ fn aggregate_and_rank_files(entities: Vec<(Box<dyn Entity>, f32)>) -> Result<Vec
         .collect();
 
     // Sort by score (descending)
-    files.sort_by(|a, b| b.relevance_score.partial_cmp(&a.relevance_score).unwrap_or(std::cmp::Ordering::Equal));
-    
+    files.sort_by(|a, b| {
+        b.relevance_score
+            .partial_cmp(&a.relevance_score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
     // Limit to top results
     if files.len() > 10 {
         files.truncate(10);
     }
-    
+
     Ok(files)
 }
 
@@ -312,7 +338,7 @@ mod tests {
         let input1 = r#"["keyword1", "keyword2", "keyword3"]"#;
         let keywords1 = extract_keywords_fallback(input1);
         assert!(!keywords1.is_empty());
-        
+
         let input2 = r#"
         [
           "function",
@@ -328,30 +354,45 @@ mod tests {
     fn test_aggregate_and_rank_files() {
         // Create dummy entities and scores
         let id1 = EntityId::new("test1");
-        let base1 = BaseEntity::new(id1, "test1".to_string(), EntityType::Function, Some("file1.rs".to_string()));
-        
+        let base1 = BaseEntity::new(
+            id1,
+            "test1".to_string(),
+            EntityType::Function,
+            Some("file1.rs".to_string()),
+        );
+
         let id2 = EntityId::new("test2");
-        let base2 = BaseEntity::new(id2, "test2".to_string(), EntityType::Function, Some("file1.rs".to_string()));
-        
+        let base2 = BaseEntity::new(
+            id2,
+            "test2".to_string(),
+            EntityType::Function,
+            Some("file1.rs".to_string()),
+        );
+
         let id3 = EntityId::new("test3");
-        let base3 = BaseEntity::new(id3, "test3".to_string(), EntityType::Function, Some("file2.rs".to_string()));
-        
+        let base3 = BaseEntity::new(
+            id3,
+            "test3".to_string(),
+            EntityType::Function,
+            Some("file2.rs".to_string()),
+        );
+
         let entities = vec![
             (Box::new(base1) as Box<dyn Entity>, 0.8),
             (Box::new(base2) as Box<dyn Entity>, 0.5),
             (Box::new(base3) as Box<dyn Entity>, 0.6),
         ];
-        
+
         let files = aggregate_and_rank_files(entities).unwrap();
-        
+
         // Should have two files
         assert_eq!(files.len(), 2);
-        
+
         // First file should be file1.rs with score 0.8
         assert_eq!(files[0].path, "file1.rs");
         assert_eq!(files[0].relevance_score, 0.8);
         assert_eq!(files[0].contributing_entity_ids.len(), 2);
-        
+
         // Second file should be file2.rs with score 0.6
         assert_eq!(files[1].path, "file2.rs");
         assert_eq!(files[1].relevance_score, 0.6);

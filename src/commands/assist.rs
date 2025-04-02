@@ -3,10 +3,10 @@ use colored::Colorize;
 use tracing;
 
 // Use fully qualified struct name to avoid confusion
-use ummon::agent::relevance_agent::RelevantFile;
 use crate::graph::knowledge_graph::KnowledgeGraph;
 use crate::prompt::context_builder::build_context;
 use crate::prompt::llm_integration::{get_llm_config, query_llm};
+use ummon::agent::relevance_agent::RelevantFile;
 
 pub async fn run(
     instruction: &str,
@@ -14,21 +14,24 @@ pub async fn run(
     llm_model: Option<&str>,
 ) -> Result<()> {
     println!("{} {}", "AI Assist:".bold().green(), instruction);
-    
+
     let db = crate::db::get_database("ummon.db")?;
-    
+
     println!("{}", "Finding relevant files...".italic());
     // Create a wrapper to convert between the two DB types
-    async fn get_relevant_files(query: &str, _db: &crate::db::Database) -> Result<Vec<RelevantFile>> {
+    async fn get_relevant_files(
+        query: &str,
+        _db: &crate::db::Database,
+    ) -> Result<Vec<RelevantFile>> {
         // Access the db via the lib crate
         let db_path = "ummon.db";
         let lib_db = ummon::db::get_database(db_path)?;
         let files = ummon::agent::relevance_agent::suggest_relevant_files(query, &lib_db).await?;
         Ok(files)
     }
-    
+
     let relevant_files = get_relevant_files(instruction, &db).await?;
-    
+
     if !relevant_files.is_empty() {
         println!("\n{}", "Suggested files:".bold().underline());
         relevant_files.iter().enumerate().for_each(|(i, file)| {
@@ -42,7 +45,7 @@ pub async fn run(
         });
         println!();
     }
-    
+
     println!("{}", "Building knowledge graph context...".italic());
     let mut kg = KnowledgeGraph::new();
 
@@ -53,19 +56,26 @@ pub async fn run(
         }
     });
 
-    db.load_relationships()?.into_iter().for_each(|relationship| {
-        kg.add_relationship(relationship);
-    });
+    db.load_relationships()?
+        .into_iter()
+        .for_each(|relationship| {
+            kg.add_relationship(relationship);
+        });
 
-    let file_context = relevant_files.iter()
+    let file_context = relevant_files
+        .iter()
         .map(|file| format!("- {}", file.path))
         .collect::<Vec<_>>()
         .join("\n");
-    
+
     let context = if file_context.is_empty() {
         build_context(&kg, instruction)
     } else {
-        format!("{}\n\nRelevant files:\n{}", build_context(&kg, instruction), file_context)
+        format!(
+            "{}\n\nRelevant files:\n{}",
+            build_context(&kg, instruction),
+            file_context
+        )
     };
 
     println!("{}", "Consulting LLM for guidance...".italic());
