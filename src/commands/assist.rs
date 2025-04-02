@@ -2,7 +2,6 @@ use anyhow::Result;
 use colored::Colorize;
 use tracing;
 
-// Use fully qualified struct name to avoid confusion
 use crate::graph::knowledge_graph::KnowledgeGraph;
 use crate::prompt::context_builder::build_context;
 use crate::prompt::llm_integration::{get_llm_config, query_llm};
@@ -18,12 +17,11 @@ pub async fn run(
     let db = crate::db::get_database("ummon.db")?;
 
     println!("{}", "Finding relevant files...".italic());
-    // Create a wrapper to convert between the two DB types
+    
     async fn get_relevant_files(
         query: &str,
         _db: &crate::db::Database,
     ) -> Result<Vec<RelevantFile>> {
-        // Access the db via the lib crate
         let db_path = "ummon.db";
         let lib_db = ummon::db::get_database(db_path)?;
         let files = ummon::agent::relevance_agent::suggest_relevant_files(query, &lib_db).await?;
