@@ -136,7 +136,7 @@ fn search_seed_entities(db: &Database, keywords: &[String]) -> Result<Vec<(Box<d
         }
 
         let condition = conditions.join(" OR ");
-        let entities = db.query_entities_by_type(&entity_type, Some(&condition))?;
+        let entities = db.query_entities_by_type(&entity_type, Some(&condition), vec![])?;
 
         for entity in entities {
             let mut score = 0.0;

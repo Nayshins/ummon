@@ -748,14 +748,15 @@ impl Database {
         Ok(())
     }
 
-    /// Query entities based on entity type and optional condition
+    /// Query entities based on entity type and optional condition with parameters
     pub fn query_entities_by_type(
         &self,
         entity_type: &EntityType,
         condition: Option<&str>,
+        params: Vec<Box<dyn rusqlite::types::ToSql>>,
     ) -> Result<Vec<Box<dyn Entity>>> {
         debug!(
-            "Querying entities of type {:?} from {}",
+            "Querying entities of type {:?} from {} with parameterized condition",
             entity_type, self.db_path
         );
 
@@ -772,10 +773,19 @@ impl Database {
             sql.push_str(cond);
         }
 
-        // Convert entity type to string
+        // Create a vector with entity_type as the first parameter
         let entity_type_str = entity_type.to_string();
 
-        self.load_entities_with_query(&sql, &[&entity_type_str])
+        // Combine the entity_type parameter with any additional parameters
+        // First convert all parameters to trait objects
+        let mut all_params: Vec<&dyn rusqlite::types::ToSql> = vec![&entity_type_str];
+
+        // Add the condition parameters
+        for param in &params {
+            all_params.push(param.as_ref());
+        }
+
+        self.load_entities_with_query(&sql, &all_params)
     }
 
     /// Find paths between entities using recursive CTEs in SQLite
@@ -804,21 +814,36 @@ impl Database {
             _ => "(r.source_id = t.id OR r.target_id = t.id)", // both directions
         };
 
-        // Define relationship type filter if specified
-        let rel_filter = relationship_type.map_or("".to_string(), |rt| {
-            format!("AND r.relationship_type = '{}'", rt)
-        });
+        // Define relationship type, max depth, and target filters with parameter placeholders
+        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
-        // Define max depth filter
+        // First parameter is always the starting entity ID
+        params.push(Box::new(from_id.as_str().to_string()));
+
+        // Define relationship type filter if specified - with parameter
+        let rel_filter = if let Some(rt) = relationship_type {
+            params.push(Box::new(rt.to_string()));
+            "AND r.relationship_type = ?"
+        } else {
+            ""
+        };
+
+        // Define max depth filter - no parameter needed as it's numeric
         let depth_filter = format!("AND t.depth < {}", max_depth);
 
-        // Define target filter (either specific ID or entity type)
-        let target_filter = if let Some(target_id) = to_id {
-            format!("WHERE e.id = '{}'", target_id.as_str())
-        } else if let Some(target_type) = target_entity_type {
-            format!("WHERE e.entity_type = '{}'", target_type)
-        } else {
-            "".to_string()
+        // Define target filter with parameter
+        let target_filter = match (to_id, target_entity_type) {
+            (Some(target_id), _) => {
+                let filter = "WHERE e.id = ?";
+                params.push(Box::new(target_id.as_str().to_string()));
+                filter
+            }
+            (_, Some(target_type)) => {
+                let filter = "WHERE e.entity_type = ?";
+                params.push(Box::new(target_type.to_string()));
+                filter
+            }
+            _ => "",
         };
 
         // Build the CTE query for path finding
@@ -841,10 +866,14 @@ impl Database {
             direction_condition, rel_filter, depth_filter, target_filter
         );
 
-        debug!("Executing path query: {}", sql);
+        debug!("Executing parameterized path query");
+
+        // Convert Box<dyn ToSql> to &dyn ToSql for query_map
+        let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+            params.iter().map(|p| p.as_ref()).collect();
 
         let mut stmt = conn.prepare(&sql)?;
-        let rows = stmt.query_map([from_id.as_str()], |row| {
+        let rows = stmt.query_map(rusqlite::params_from_iter(param_refs.iter()), |row| {
             let id: String = row.get(0)?;
             let depth: i64 = row.get(1)?;
             Ok((EntityId::new(&id), depth as usize))

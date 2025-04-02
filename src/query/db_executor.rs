@@ -1,10 +1,20 @@
 use anyhow::{anyhow, Result};
+use rusqlite::types::ToSql;
 
 use crate::db::Database;
 use crate::graph::entity::{Entity, EntityId};
 use crate::graph::relationship::RelationshipType;
 
 use super::parser::{ConditionNode, Operator, QueryType, SelectQuery, TraversalQuery, Value};
+
+/// List of allowed column names for safe attribute access
+const ALLOWED_COLUMNS: [&str; 4] = ["name", "file_path", "documentation", "id"];
+
+/// SQL query with parameters, used to avoid SQL injection
+pub struct SafeQuery {
+    pub sql: String,
+    pub params: Vec<Box<dyn ToSql>>,
+}
 
 /// Executes a parsed query against the SQLite database directly
 pub struct DbQueryExecutor<'a> {
@@ -28,20 +38,25 @@ impl<'a> DbQueryExecutor<'a> {
     fn execute_select(&self, query: &SelectQuery) -> Result<Vec<Box<dyn Entity>>> {
         let entity_type = &query.entity_type.entity_type;
 
-        let sql_condition = match &query.conditions {
+        let safe_query = match &query.conditions {
             Some(condition) => Some(self.condition_to_sql(condition)?),
             None => None,
         };
 
-        self.db
-            .query_entities_by_type(entity_type, sql_condition.as_deref())
+        // Unpack the safe query into condition and parameters
+        match safe_query {
+            Some(sq) => self
+                .db
+                .query_entities_by_type(entity_type, Some(&sq.sql), sq.params),
+            None => self.db.query_entities_by_type(entity_type, None, vec![]),
+        }
     }
 
     /// Execute a traversal query using the database's find_paths method
     fn execute_traversal(&self, query: &TraversalQuery) -> Result<Vec<Box<dyn Entity>>> {
-        let source_entities = self
-            .db
-            .query_entities_by_type(&query.source_type.entity_type, None)?;
+        let source_entities =
+            self.db
+                .query_entities_by_type(&query.source_type.entity_type, None, vec![])?;
 
         let mut result_entities = Vec::new();
 
@@ -105,15 +120,21 @@ impl<'a> DbQueryExecutor<'a> {
 
         for target_id in target_ids {
             if let Some(entity) = self.db.load_entity(target_id)? {
-                let sql_condition = self.condition_to_sql(condition)?;
                 let entity_type = entity.entity_type();
 
-                let id_condition = format!("id = '{}'", target_id.as_str());
-                let combined_condition = format!("{} AND {}", id_condition, sql_condition);
+                let mut safe_query = self.condition_to_sql(condition)?;
 
-                let matching_entities = self
-                    .db
-                    .query_entities_by_type(&entity_type, Some(&combined_condition))?;
+                let id_condition = "id = ?".to_string();
+                let combined_sql = format!("{} AND ({})", id_condition, safe_query.sql);
+
+                let mut combined_params: Vec<Box<dyn ToSql>> =
+                    vec![Box::new(target_id.as_str().to_string())];
+                combined_params.append(&mut safe_query.params);
+                let matching_entities = self.db.query_entities_by_type(
+                    &entity_type,
+                    Some(&combined_sql),
+                    combined_params,
+                )?;
 
                 if !matching_entities.is_empty() {
                     return Ok(true);
@@ -124,31 +145,63 @@ impl<'a> DbQueryExecutor<'a> {
         Ok(false)
     }
 
-    /// Convert a condition to SQL where clause
-    fn condition_to_sql(&self, condition: &ConditionNode) -> Result<String> {
+    /// Convert a condition to SQL where clause with parameterized values
+    fn condition_to_sql(&self, condition: &ConditionNode) -> Result<SafeQuery> {
         match condition {
             ConditionNode::And(left, right) => {
-                let left_sql = self.condition_to_sql(left)?;
-                let right_sql = self.condition_to_sql(right)?;
-                Ok(format!("({}) AND ({})", left_sql, right_sql))
+                let left_query = self.condition_to_sql(left)?;
+                let right_query = self.condition_to_sql(right)?;
+
+                // Combine SQL parts
+                let sql = format!("({}) AND ({})", left_query.sql, right_query.sql);
+
+                // Combine parameters, preserving order
+                let mut params = left_query.params;
+                params.extend(right_query.params);
+
+                Ok(SafeQuery { sql, params })
             }
             ConditionNode::Or(left, right) => {
-                let left_sql = self.condition_to_sql(left)?;
-                let right_sql = self.condition_to_sql(right)?;
-                Ok(format!("({}) OR ({})", left_sql, right_sql))
+                let left_query = self.condition_to_sql(left)?;
+                let right_query = self.condition_to_sql(right)?;
+
+                let sql = format!("({}) OR ({})", left_query.sql, right_query.sql);
+
+                let mut params = left_query.params;
+                params.extend(right_query.params);
+
+                Ok(SafeQuery { sql, params })
             }
             ConditionNode::Not(inner) => {
-                let inner_sql = self.condition_to_sql(inner)?;
-                Ok(format!("NOT ({})", inner_sql))
+                let inner_query = self.condition_to_sql(inner)?;
+                let sql = format!("NOT ({})", inner_query.sql);
+
+                Ok(SafeQuery {
+                    sql,
+                    params: inner_query.params,
+                })
             }
             ConditionNode::HasAttribute(attr) => {
-                match attr.as_str() {
-                    "name" => Ok("name IS NOT NULL AND name != ''".to_string()),
-                    "file_path" | "path" => Ok("file_path IS NOT NULL".to_string()),
-                    "documentation" => Ok("documentation IS NOT NULL".to_string()),
-                    // For other attributes, we'd need to check metadata in JSON
-                    // This is simplified, as proper handling would need JSON extraction
-                    _ => Ok(format!("data LIKE '%{}%'", attr)),
+                let attr_name = self.validate_attribute_name(attr)?;
+
+                match attr_name {
+                    "name" => Ok(SafeQuery {
+                        sql: "name IS NOT NULL AND name != ''".to_string(),
+                        params: vec![],
+                    }),
+                    "file_path" => Ok(SafeQuery {
+                        sql: "file_path IS NOT NULL".to_string(),
+                        params: vec![],
+                    }),
+                    "documentation" => Ok(SafeQuery {
+                        sql: "documentation IS NOT NULL".to_string(),
+                        params: vec![],
+                    }),
+                    // For other attributes, use a parameterized LIKE query
+                    _ => Err(anyhow!(
+                        "Attribute '{}' is not supported for 'has' condition",
+                        attr
+                    )),
                 }
             }
             ConditionNode::Condition {
@@ -156,19 +209,8 @@ impl<'a> DbQueryExecutor<'a> {
                 operator,
                 value,
             } => {
-                let attr_name = match attribute.as_str() {
-                    "name" => "name",
-                    "file_path" | "path" => "file_path",
-                    "documentation" => "documentation",
-                    // For other attributes, we'd need to check metadata or data JSON
-                    // This is simplified and might not work for all attributes
-                    _ => {
-                        return Err(anyhow!(
-                            "Attribute {} is not directly supported in SQL conversion",
-                            attribute
-                        ))
-                    }
-                };
+                // Validate attribute name against allowed columns
+                let attr_name = self.validate_attribute_name(attribute)?;
 
                 let sql_op = match operator {
                     Operator::Equal => "=",
@@ -180,13 +222,32 @@ impl<'a> DbQueryExecutor<'a> {
                     Operator::Like => "LIKE",
                 };
 
-                let sql_value = match value {
-                    Value::String(s) => format!("'{}'", s.replace('\'', "''")), // Escape single quotes for SQL safety
-                    Value::Number(n) => n.to_string(),
+                // Create parameterized query with placeholder
+                let sql = format!("{} {} ?", attr_name, sql_op);
+
+                // Convert value to SQL parameter
+                let param: Box<dyn ToSql> = match value {
+                    Value::String(s) => Box::new(s.clone()),
+                    Value::Number(n) => Box::new(*n),
                 };
 
-                Ok(format!("{} {} {}", attr_name, sql_op, sql_value))
+                Ok(SafeQuery {
+                    sql,
+                    params: vec![param],
+                })
             }
+        }
+    }
+
+    /// Validate an attribute name against the allowed column whitelist
+    fn validate_attribute_name<'b>(&self, name: &'b str) -> Result<&'b str> {
+        if ALLOWED_COLUMNS.contains(&name) {
+            Ok(name)
+        } else {
+            Err(anyhow!(
+                "Attribute '{}' is not supported or not allowed",
+                name
+            ))
         }
     }
 }
@@ -282,5 +343,42 @@ mod tests {
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].name(), "auth_login");
+    }
+
+    #[test]
+    fn test_condition_to_sql_parameterization() {
+        use super::super::parser::{ConditionNode, Operator, Value};
+
+        let db = create_test_db();
+        let executor = DbQueryExecutor::new(&db);
+
+        // Test string condition
+        let condition = ConditionNode::Condition {
+            attribute: "name".to_string(),
+            operator: Operator::Equal,
+            value: Value::String("test".to_string()),
+        };
+
+        let result = executor.condition_to_sql(&condition).unwrap();
+        assert_eq!(result.sql, "name = ?");
+        assert_eq!(result.params.len(), 1);
+
+        // Test complex condition
+        let complex = ConditionNode::And(
+            Box::new(ConditionNode::Condition {
+                attribute: "name".to_string(),
+                operator: Operator::Like,
+                value: Value::String("test%".to_string()),
+            }),
+            Box::new(ConditionNode::Condition {
+                attribute: "file_path".to_string(),
+                operator: Operator::Like,
+                value: Value::String("src/%".to_string()),
+            }),
+        );
+
+        let result = executor.condition_to_sql(&complex).unwrap();
+        assert_eq!(result.sql, "(name LIKE ?) AND (file_path LIKE ?)");
+        assert_eq!(result.params.len(), 2);
     }
 }
