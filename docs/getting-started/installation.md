@@ -32,7 +32,7 @@ Alternatively, you can build Ummon from source:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/ummon.git
+git clone https://github.com/Nayshins/ummon.git
 cd ummon
 
 # Build the project
