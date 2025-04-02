@@ -102,3 +102,4 @@ Tests have been set up as inline modules within each source file using Rust's `#
 - **Minimalism**: Avoid adding comments for straightforward operations or self-explanatory code
 - **IMPORTANT**: Do NOT add inline comments that merely restate what the code already shows (e.g., "// Iterate through users" for a loop over users)
 - **CRITICAL**: Never use redundant or descriptive inline comments that explain the obvious function of the code
+- Let's be aware of the code standards set in this guide. Do not add redundant inline comments and focus on a functional style.

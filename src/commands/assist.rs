@@ -1,47 +1,77 @@
 use anyhow::Result;
+use colored::Colorize;
 use tracing;
 
+// Use fully qualified struct name to avoid confusion
+use ummon::agent::relevance_agent::RelevantFile;
 use crate::graph::knowledge_graph::KnowledgeGraph;
 use crate::prompt::context_builder::build_context;
-use crate::prompt::llm_integration::query_llm;
+use crate::prompt::llm_integration::{get_llm_config, query_llm};
 
 pub async fn run(
     instruction: &str,
     llm_provider: Option<&str>,
     llm_model: Option<&str>,
 ) -> Result<()> {
-    println!("AI Assist: {}", instruction);
-
-    // Load the knowledge graph from database
+    println!("{} {}", "AI Assist:".bold().green(), instruction);
+    
     let db = crate::db::get_database("ummon.db")?;
+    
+    println!("{}", "Finding relevant files...".italic());
+    // Create a wrapper to convert between the two DB types
+    async fn get_relevant_files(query: &str, _db: &crate::db::Database) -> Result<Vec<RelevantFile>> {
+        // Access the db via the lib crate
+        let db_path = "ummon.db";
+        let lib_db = ummon::db::get_database(db_path)?;
+        let files = ummon::agent::relevance_agent::suggest_relevant_files(query, &lib_db).await?;
+        Ok(files)
+    }
+    
+    let relevant_files = get_relevant_files(instruction, &db).await?;
+    
+    if !relevant_files.is_empty() {
+        println!("\n{}", "Suggested files:".bold().underline());
+        relevant_files.iter().enumerate().for_each(|(i, file)| {
+            println!(
+                "{}. {} (score: {:.2}, entities: {})",
+                i + 1,
+                file.path.bold(),
+                file.relevance_score,
+                file.contributing_entity_ids.len()
+            );
+        });
+        println!();
+    }
+    
+    println!("{}", "Building knowledge graph context...".italic());
     let mut kg = KnowledgeGraph::new();
 
-    // Load entities from database
     let entities = db.load_entities()?;
-    for entity in entities {
+    entities.into_iter().for_each(|entity| {
         if let Err(e) = kg.add_boxed_entity(entity) {
             tracing::warn!("Failed to add entity to knowledge graph: {}", e);
         }
-    }
+    });
 
-    // Load relationships from database
-    let relationships = db.load_relationships()?;
-    for relationship in relationships {
+    db.load_relationships()?.into_iter().for_each(|relationship| {
         kg.add_relationship(relationship);
-    }
+    });
 
-    // Build relevant context
-    let context = build_context(&kg, instruction);
+    let file_context = relevant_files.iter()
+        .map(|file| format!("- {}", file.path))
+        .collect::<Vec<_>>()
+        .join("\n");
+    
+    let context = if file_context.is_empty() {
+        build_context(&kg, instruction)
+    } else {
+        format!("{}\n\nRelevant files:\n{}", build_context(&kg, instruction), file_context)
+    };
 
-    // Create LLM config
-    let config = crate::prompt::llm_integration::get_llm_config(llm_provider, llm_model);
+    println!("{}", "Consulting LLM for guidance...".italic());
+    let response = query_llm(&context, &get_llm_config(llm_provider, llm_model)).await?;
 
-    // We're already in an async context (from tokio::main), so we can just await
-    let response = query_llm(&context, &config).await?;
-
-    println!("LLM suggests:\n{}", response);
-
-    // For advanced usage, parse diffs from response & apply them.
+    println!("\n{}\n{}", "LLM suggests:".bold().blue(), response);
 
     Ok(())
 }

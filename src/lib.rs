@@ -1,4 +1,5 @@
 // Expose modules as public for use by other crates
+pub mod agent;
 pub mod db;
 pub mod graph;
 pub mod parser;
