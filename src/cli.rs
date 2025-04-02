@@ -20,6 +20,10 @@ pub enum Commands {
         #[arg(default_value = ".")]
         path: String,
 
+        /// Perform a full rebuild, clearing existing data
+        #[arg(long)]
+        full: bool,
+
         /// Enable domain model extraction using LLM
         #[arg(long, short = 'e')]
         enable_domain_extraction: bool,

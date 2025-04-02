@@ -1,5 +1,5 @@
 use crate::db;
-use crate::query::{self, DbQueryExecutor, QueryOptions};
+use crate::query::{self, QueryOptions};
 use anyhow::Result;
 
 /// Runs the query command with the provided arguments

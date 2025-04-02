@@ -7,6 +7,7 @@ use super::entity::{
     TypeEntity, VariableEntity,
 };
 use super::relationship::{Relationship, RelationshipStore, RelationshipType};
+use log::debug;
 
 /// Enhanced knowledge graph that stores entities and relationships
 #[derive(Debug, Serialize, Deserialize)]
@@ -17,6 +18,8 @@ pub struct KnowledgeGraph {
     relationship_data: Vec<Relationship>,
     #[serde(skip)]
     search_index: HashMap<String, Vec<EntityId>>,
+    #[serde(skip)]
+    pub database: Option<crate::db::Database>,
 }
 
 /// Type for storing different entity types
@@ -75,7 +78,24 @@ impl KnowledgeGraph {
             relationship_store: RelationshipStore::new(),
             relationship_data: Vec::new(),
             search_index: HashMap::new(),
+            database: None,
         }
+    }
+
+    /// Create a new knowledge graph with a database connection
+    pub fn new_with_db(db: crate::db::Database) -> Self {
+        Self {
+            entities: HashMap::new(),
+            relationship_store: RelationshipStore::new(),
+            relationship_data: Vec::new(),
+            search_index: HashMap::new(),
+            database: Some(db),
+        }
+    }
+
+    /// Set the database for this knowledge graph
+    pub fn set_database(&mut self, db: crate::db::Database) {
+        self.database = Some(db);
     }
 
     /// Add a boxed entity directly to the graph
@@ -499,6 +519,45 @@ impl KnowledgeGraph {
     /// Returns a vector of all relationships in the graph directly from the relationship store
     pub fn get_all_relationships(&self) -> Result<Vec<Relationship>> {
         Ok(self.relationship_store.get_all_relationships())
+    }
+
+    /// Prune entities and relationships associated with specific files
+    ///
+    /// This method removes all entities and their relationships that belong
+    /// to the specified file paths. It's used to selectively update parts of
+    /// the knowledge graph without rebuilding everything.
+    pub fn prune(&self, modified_files: &[String]) -> anyhow::Result<()> {
+        debug!("Pruning graph for {} modified files", modified_files.len());
+
+        if let Some(db) = &self.database {
+            // Remove entities and relationships for these files from the database
+            db.remove_entities_and_relationships_by_files(modified_files)?;
+            debug!("Successfully pruned entries for modified files");
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!(
+                "No database connection available for pruning"
+            ))
+        }
+    }
+
+    /// Purge all entities and relationships from the graph
+    ///
+    /// This method completely clears the knowledge graph and its database.
+    /// Use with caution, as it will remove all indexed data.
+    pub fn purge(&self) -> anyhow::Result<()> {
+        debug!("Purging entire knowledge graph");
+
+        if let Some(db) = &self.database {
+            // Remove all entities and relationships from the database
+            db.purge_graph()?;
+            debug!("Successfully purged knowledge graph");
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!(
+                "No database connection available for purging"
+            ))
+        }
     }
 }
 
