@@ -25,6 +25,7 @@ Named after the AI Ummon from Dan Simmons' Hyperion Cantos, this project provide
    - Works with multiple languages (Rust, Python, JavaScript, Java)
    - Supports both incremental updates and full rebuilds
    - Tracks file modifications to minimize reprocessing
+   - See [Knowledge Graph Documentation](docs/features/knowledge-graph.md) for more details
 
 2. **Advanced Querying System**
    - Query your codebase using a powerful structured query language or natural language
@@ -35,7 +36,7 @@ Named after the AI Ummon from Dan Simmons' Hyperion Cantos, this project provide
    - Rich filtering capabilities with attribute conditions and logical operators
    - Multiple output formats (text, JSON, CSV, tree)
    - Examples: "select functions where name like 'auth%'", "show me all authentication functions"
-   - See [Query System Documentation](docs/query_system.md) for more details
+   - See [Query System Documentation](docs/features/query-system.md) for more details
 
 3. **Relevance Agent**
    - Suggests code files relevant to a proposed change or query
@@ -44,11 +45,13 @@ Named after the AI Ummon from Dan Simmons' Hyperion Cantos, this project provide
    - Scores files by relevance using both proximity and graph centrality metrics
    - Enables context-aware assistance with a ranked list of most relevant files
    - Example: For "Fix authentication bug", it identifies auth-related files
+   - See [Relevance Agent Documentation](docs/features/relevance-agent.md) for more details
 
 4. **Domain Model Extraction**
    - Uses LLMs to identify business entities and concepts
    - Maps domain concepts to implementation details
    - Creates a bridge between technical and business understanding
+   - See [Domain Extraction Documentation](docs/features/domain-extraction.md) for more details
 
 ## Installation and Setup
 
@@ -158,6 +161,15 @@ When run with the `--full` flag, Ummon will perform a complete rebuild:
 - Purges all entities and relationships from the database
 - Reindexes the entire codebase from scratch
 - Useful after major changes or when the graph might be in an inconsistent state
+
+## Documentation
+
+For more detailed documentation, see:
+
+- **[Getting Started](docs/getting-started/installation.md)**: Installation and quick start guides
+- **[Feature Documentation](docs/features/)**: Detailed documentation for each feature
+- **[CLI Reference](docs/reference/cli-reference.md)**: Complete command-line reference
+- **[Configuration](docs/reference/configuration.md)**: Configuration options and best practices
 
 ## Development
 

@@ -1410,7 +1410,7 @@ impl Database {
 
         // Define relationship type filter if specified
         let rel_filter = relationship_type.map_or("".to_string(), |rt| {
-            format!("AND r.relationship_type = '{}'", rt.to_string())
+            format!("AND r.relationship_type = '{}'", rt)
         });
 
         // Define max depth filter
@@ -1420,7 +1420,7 @@ impl Database {
         let target_filter = if let Some(target_id) = to_id {
             format!("WHERE e.id = '{}'", target_id.as_str())
         } else if let Some(target_type) = target_entity_type {
-            format!("WHERE e.entity_type = '{}'", target_type.to_string())
+            format!("WHERE e.entity_type = '{}'", target_type)
         } else {
             "".to_string()
         };
