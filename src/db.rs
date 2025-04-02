@@ -835,13 +835,11 @@ impl Database {
         let target_filter = match (to_id, target_entity_type) {
             (Some(target_id), _) => {
                 let filter = "WHERE e.id = ?";
-                // Add target ID parameter directly to params list
                 params.push(Box::new(target_id.as_str().to_string()));
                 filter
             }
             (_, Some(target_type)) => {
                 let filter = "WHERE e.entity_type = ?";
-                // Add entity type parameter directly to params list
                 params.push(Box::new(target_type.to_string()));
                 filter
             }

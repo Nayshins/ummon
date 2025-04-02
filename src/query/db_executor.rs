@@ -122,19 +122,14 @@ impl<'a> DbQueryExecutor<'a> {
             if let Some(entity) = self.db.load_entity(target_id)? {
                 let entity_type = entity.entity_type();
 
-                // Generate the condition SQL and parameters
                 let mut safe_query = self.condition_to_sql(condition)?;
 
-                // Add the ID condition with parameterized query
                 let id_condition = "id = ?".to_string();
                 let combined_sql = format!("{} AND ({})", id_condition, safe_query.sql);
 
-                // Insert the ID parameter at the beginning
                 let mut combined_params: Vec<Box<dyn ToSql>> =
                     vec![Box::new(target_id.as_str().to_string())];
                 combined_params.append(&mut safe_query.params);
-
-                // Use the combined condition
                 let matching_entities = self.db.query_entities_by_type(
                     &entity_type,
                     Some(&combined_sql),
@@ -187,7 +182,6 @@ impl<'a> DbQueryExecutor<'a> {
                 })
             }
             ConditionNode::HasAttribute(attr) => {
-                // Validate attribute name against allowed columns
                 let attr_name = self.validate_attribute_name(attr)?;
 
                 match attr_name {
