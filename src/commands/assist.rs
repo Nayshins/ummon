@@ -17,7 +17,7 @@ pub async fn run(
     let db = crate::db::get_database("ummon.db")?;
 
     println!("{}", "Finding relevant files...".italic());
-    
+
     async fn get_relevant_files(
         query: &str,
         _db: &crate::db::Database,
