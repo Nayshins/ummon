@@ -832,22 +832,21 @@ impl Database {
         let depth_filter = format!("AND t.depth < {}", max_depth);
 
         // Define target filter with parameter
-        let (target_filter, target_params) = match (to_id, target_entity_type) {
+        let target_filter = match (to_id, target_entity_type) {
             (Some(target_id), _) => {
                 let filter = "WHERE e.id = ?";
-                let param = Box::new(target_id.as_str().to_string());
-                (filter, vec![param])
+                // Add target ID parameter directly to params list
+                params.push(Box::new(target_id.as_str().to_string()));
+                filter
             }
             (_, Some(target_type)) => {
                 let filter = "WHERE e.entity_type = ?";
-                let param = Box::new(target_type.to_string());
-                (filter, vec![param])
+                // Add entity type parameter directly to params list
+                params.push(Box::new(target_type.to_string()));
+                filter
             }
-            _ => ("", vec![]),
+            _ => "",
         };
-
-        // Add target params to the main parameter list
-        params.extend(target_params);
 
         // Build the CTE query for path finding
         let sql = format!(
