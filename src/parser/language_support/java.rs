@@ -1,4 +1,5 @@
 use super::*;
+use super::{node_to_location, traverse_node};
 use tree_sitter::{Node, Parser};
 
 pub struct JavaParser {
@@ -18,38 +19,22 @@ impl JavaParser {
         Self { parser }
     }
 
-    #[allow(clippy::only_used_in_recursion)]
-    fn traverse_node<F>(&self, node: Node, f: &mut F)
-    where
-        F: FnMut(Node),
-    {
-        f(node);
-        let mut cursor = node.walk();
-        for child in node.children(&mut cursor) {
-            self.traverse_node(child, f);
-        }
-    }
-
     fn extract_function_details(
         &self,
         node: Node,
         content: &str,
         file_path: &str,
     ) -> Option<FunctionDefinition> {
-        // Check if this is a method declaration
         if node.kind() != "method_declaration" && node.kind() != "constructor_declaration" {
             return None;
         }
 
-        // Get method name
         let name = if node.kind() == "method_declaration" {
             node.child_by_field_name("name")?
                 .utf8_text(content.as_bytes())
                 .ok()?
                 .to_string()
         } else {
-            // Constructor name comes from the class name
-            // We need to find the parent class
             let mut current = node;
             while let Some(parent) = current.parent() {
                 if parent.kind() == "class_declaration" {
@@ -70,10 +55,9 @@ impl JavaParser {
                 }
                 current = parent;
             }
-            return None; // Couldn't find parent class
+            return None;
         };
 
-        // Determine containing type
         let mut containing_type = None;
         let mut current = node;
         while let Some(parent) = current.parent() {
@@ -126,18 +110,7 @@ impl JavaParser {
     }
 
     fn extract_location(&self, node: Node) -> Location {
-        Location {
-            start: Position {
-                line: node.start_position().row,
-                column: node.start_position().column,
-                offset: node.start_byte(),
-            },
-            end: Position {
-                line: node.end_position().row,
-                column: node.end_position().column,
-                offset: node.end_byte(),
-            },
-        }
+        node_to_location(node)
     }
 
     fn extract_generic_parameters(&self, node: Node, content: &str) -> Vec<GenericParameter> {
@@ -336,7 +309,7 @@ impl JavaParser {
 
         // Extract method names (for reference)
         let mut methods = Vec::new();
-        self.traverse_node(node, &mut |n| {
+        traverse_node(node, &mut |n| {
             if n.kind() == "method_declaration" {
                 if let Some(method_name) = n.child_by_field_name("name") {
                     if let Ok(name) = method_name.utf8_text(content.as_bytes()) {
@@ -403,7 +376,7 @@ impl JavaParser {
     fn extract_fields(&self, node: Node, content: &str) -> Vec<FieldDefinition> {
         let mut fields = Vec::new();
 
-        self.traverse_node(node, &mut |n| {
+        traverse_node(node, &mut |n| {
             if n.kind() == "field_declaration" {
                 // Java field declaration can contain multiple variables
                 if let Some(declarator_list) = n.child_by_field_name("declarator") {
@@ -438,7 +411,7 @@ impl JavaParser {
                     let is_static_clone = is_static;
 
                     // Process each variable declarator
-                    self.traverse_node(declarator_list, &mut |var_node| {
+                    traverse_node(declarator_list, &mut |var_node| {
                         if var_node.kind() == "variable_declarator" {
                             if let Some(name_node) = var_node.child_by_field_name("name") {
                                 if let Ok(field_name) = name_node.utf8_text(content.as_bytes()) {
@@ -532,7 +505,6 @@ impl LanguageParser for JavaParser {
         content: &str,
         file_path: &str,
     ) -> Result<Vec<FunctionDefinition>> {
-        // Handle empty content case gracefully
         if content.is_empty() {
             tracing::debug!("Empty Java file content for '{}'", file_path);
             return Ok(Vec::new());
@@ -564,7 +536,7 @@ impl LanguageParser for JavaParser {
             root_node.child_count()
         );
 
-        self.traverse_node(root_node, &mut |node| {
+        traverse_node(root_node, &mut |node| {
             if let Some(func) = self.extract_function_details(node, content, file_path) {
                 functions.push(func);
             }
@@ -603,7 +575,7 @@ impl LanguageParser for JavaParser {
             root_node.child_count()
         );
 
-        self.traverse_node(root_node, &mut |node| {
+        traverse_node(root_node, &mut |node| {
             if let Some(type_def) = self.extract_type_details(node, content, file_path) {
                 types.push(type_def);
             }
@@ -626,7 +598,6 @@ impl LanguageParser for JavaParser {
             .parser
             .parse(content, None)
             .ok_or_else(|| {
-                // Provide detailed error message with file info
                 let filename = Path::new(file_path)
                     .file_name()
                     .and_then(|n| n.to_str())
@@ -649,40 +620,26 @@ impl LanguageParser for JavaParser {
             root_node.child_count()
         );
 
-        self.traverse_node(root_node, &mut |node| {
+        traverse_node(root_node, &mut |node| {
             if node.kind() == "method_invocation" {
                 if let Some(name_node) = node.child_by_field_name("name") {
                     if let Ok(name) = name_node.utf8_text(content.as_bytes()) {
                         let mut fully_qualified_name = None;
 
-                        // Check if there's an object reference for this method call
                         if let Some(object_node) = node.child_by_field_name("object") {
                             if let Ok(object_name) = object_node.utf8_text(content.as_bytes()) {
                                 fully_qualified_name = Some(format!("{}.{}", object_name, name));
                             }
                         }
 
-                        // Create location for the call
-                        let location = Location {
-                            start: Position {
-                                line: node.start_position().row,
-                                column: node.start_position().column,
-                                offset: node.start_byte(),
-                            },
-                            end: Position {
-                                line: node.end_position().row,
-                                column: node.end_position().column,
-                                offset: node.end_byte(),
-                            },
-                        };
+                        let location = node_to_location(node);
 
-                        // Use helper method to create the call reference
                         calls.push(CallReference::with_details(
                             name.to_string(),
                             fully_qualified_name,
                             Some(location),
                             Some(file_path.to_string()),
-                            Vec::new(), // We'll add argument extraction later
+                            Vec::new(),
                         ));
                     }
                 }
@@ -765,7 +722,7 @@ impl LanguageParser for JavaParser {
         }
 
         // Extract imports
-        self.traverse_node(root_node, &mut |node| {
+        traverse_node(root_node, &mut |node| {
             if node.kind() == "import_declaration" {
                 if let Some(name_node) = node.child_by_field_name("name") {
                     if let Ok(import_name) = name_node.utf8_text(content.as_bytes()) {
@@ -796,7 +753,7 @@ impl LanguageParser for JavaParser {
         });
 
         // Extract public class/interface names as exports
-        self.traverse_node(root_node, &mut |node| {
+        traverse_node(root_node, &mut |node| {
             if node.kind() == "class_declaration"
                 || node.kind() == "interface_declaration"
                 || node.kind() == "enum_declaration"

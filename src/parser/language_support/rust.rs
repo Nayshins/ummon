@@ -1,4 +1,5 @@
 use super::*;
+use super::{node_to_location, traverse_node};
 use anyhow::Result;
 use std::path::Path;
 use tree_sitter::{Node, Parser};
@@ -41,18 +42,6 @@ impl RustParser {
             .set_language(tree_sitter_rust::language())
             .map_err(|e| anyhow::anyhow!("Failed to load Rust grammar: {}", e))?;
         Ok(Self { parser })
-    }
-
-    #[allow(clippy::only_used_in_recursion)]
-    fn traverse_node<F>(&self, node: Node, f: &mut F)
-    where
-        F: FnMut(Node),
-    {
-        f(node);
-        let mut cursor = node.walk();
-        for child in node.children(&mut cursor) {
-            self.traverse_node(child, f);
-        }
     }
 
     fn extract_visibility(&self, node: Node) -> Visibility {
@@ -381,18 +370,7 @@ impl RustParser {
 
     /// Creates a Location object from a tree-sitter node
     fn create_location_from_node(&self, node: Node) -> Location {
-        Location {
-            start: Position {
-                line: node.start_position().row,
-                column: node.start_position().column,
-                offset: node.start_byte(),
-            },
-            end: Position {
-                line: node.end_position().row,
-                column: node.end_position().column,
-                offset: node.end_byte(),
-            },
-        }
+        node_to_location(node)
     }
 
     /// Extracts struct fields from a struct AST node
@@ -437,7 +415,7 @@ impl RustParser {
     fn find_nested_types(&self, node: Node, content: &str, file_path: &str) -> Vec<TypeDefinition> {
         let mut nested_types = Vec::new();
 
-        self.traverse_node(node, &mut |child_node| {
+        traverse_node(node, &mut |child_node| {
             // Only look for direct child structs/enums/etc. within the module, impl, or struc
             if matches!(
                 child_node.kind(),
@@ -528,7 +506,7 @@ impl RustParser {
                 // Extract method names (for impl blocks)
                 let mut methods = Vec::new();
 
-                self.traverse_node(node, &mut |n| {
+                traverse_node(node, &mut |n| {
                     if n.kind() == "function_item" {
                         if let Some(method_name) = n.child_by_field_name("name") {
                             if let Ok(name) = method_name.utf8_text(content.as_bytes()) {
@@ -595,7 +573,7 @@ impl RustParser {
     ) -> Vec<FunctionDefinition> {
         let mut functions = Vec::new();
 
-        self.traverse_node(node, &mut |child_node| {
+        traverse_node(node, &mut |child_node| {
             if child_node.kind() == "function_item" {
                 if let Some(mut func) =
                     self.extract_function_details(child_node, content, file_path)
@@ -705,15 +683,13 @@ impl LanguageParser for RustParser {
         );
 
         // First, find all module definitions
-        self.traverse_node(root_node, &mut |node| {
+        traverse_node(root_node, &mut |node| {
             if node.kind() == "mod_item" {
                 // Process all types directly inside a module
                 if let Some(name_node) = node.child_by_field_name("name") {
                     if let Ok(module_name) = name_node.utf8_text(content.as_bytes()) {
-                        // Find the module body
                         if let Some(body) = node.child_by_field_name("body") {
-                            // Look for types in the module
-                            self.traverse_node(body, &mut |child_node| {
+                            traverse_node(body, &mut |child_node| {
                                 if matches!(
                                     child_node.kind(),
                                     "struct_item" | "enum_item" | "trait_item" | "impl_item"
@@ -721,12 +697,10 @@ impl LanguageParser for RustParser {
                                     if let Some(mut type_def) =
                                         self.extract_type_details(child_node, content, file_path)
                                     {
-                                        // Set the containing module
                                         type_def.containing_entity_name =
                                             Some(module_name.to_string());
                                         types.push(type_def);
 
-                                        // Find nested types within this type
                                         let nested_types =
                                             self.find_nested_types(child_node, content, file_path);
                                         types.extend(nested_types);
@@ -739,8 +713,7 @@ impl LanguageParser for RustParser {
             }
         });
 
-        // Then find top-level types (not in modules)
-        self.traverse_node(root_node, &mut |node| {
+        traverse_node(root_node, &mut |node| {
             if matches!(
                 node.kind(),
                 "struct_item" | "enum_item" | "trait_item" | "impl_item"
@@ -819,7 +792,7 @@ impl LanguageParser for RustParser {
         );
 
         // First, find all top-level functions
-        self.traverse_node(root_node, &mut |node| {
+        traverse_node(root_node, &mut |node| {
             if node.kind() == "function_item" {
                 let is_top_level = node.parent().is_none()
                     || node.parent().is_some_and(|p| p.kind() == "source_file");
@@ -833,7 +806,7 @@ impl LanguageParser for RustParser {
         });
 
         // Now find functions nested in modules, impls, and types
-        self.traverse_node(root_node, &mut |node| {
+        traverse_node(root_node, &mut |node| {
             if matches!(
                 node.kind(),
                 "mod_item" | "impl_item" | "struct_item" | "enum_item" | "trait_item"
@@ -899,22 +872,9 @@ impl LanguageParser for RustParser {
             content.len()
         );
 
-        self.traverse_node(root_node, &mut |node| {
+        traverse_node(root_node, &mut |node| {
             // Create a Location from a tree-sitter node
-            let create_location = |node: Node| -> Location {
-                Location {
-                    start: Position {
-                        line: node.start_position().row,
-                        column: node.start_position().column,
-                        offset: node.start_byte(),
-                    },
-                    end: Position {
-                        line: node.end_position().row,
-                        column: node.end_position().column,
-                        offset: node.end_byte(),
-                    },
-                }
-            };
+            let create_location = |node: Node| -> Location { node_to_location(node) };
 
             // Extract arguments from a node
             let extract_arguments = |node: Node| -> Vec<String> {
