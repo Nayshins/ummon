@@ -274,10 +274,8 @@ impl Database {
         let documentation: Option<String> = row.get(5)?;
         let containing_entity: Option<String> = row.get(6)?;
 
-        // Parse entity type
         let entity_type = parse_entity_type(&entity_type_str);
 
-        // Parse location if present
         let location = if let Some(loc_str) = location_json {
             match serde_json::from_str(&loc_str) {
                 Ok(loc) => Some(loc),
@@ -290,7 +288,6 @@ impl Database {
             None
         };
 
-        // Create BaseEntity
         let mut base = BaseEntity::new(EntityId::new(&id), name, entity_type, file_path);
 
         base.location = location;
@@ -320,7 +317,6 @@ impl Database {
                             "Failed to parse FunctionEntityData for entity {}: {}, using default values",
                             base.id.as_str(), e
                         );
-                        // Use default values
                         let default_data = FunctionEntityData::default();
                         Box::new(FunctionEntity {
                             base,
@@ -353,7 +349,6 @@ impl Database {
                     Err(e) => {
                         error!("Failed to parse TypeEntityData for entity {}: {}, using default values", 
                         base.id.as_str(), e);
-                        // Use default values
                         let default_data = TypeEntityData::default();
                         Box::new(TypeEntity {
                             base,
@@ -377,7 +372,6 @@ impl Database {
                     Err(e) => {
                         error!("Failed to parse ModuleEntityData for entity {}: {}, using default values", 
                             base.id.as_str(), e);
-                        // Use default values
                         let default_data = ModuleEntityData::default();
                         Box::new(ModuleEntity {
                             base,
@@ -402,7 +396,6 @@ impl Database {
                             "Failed to parse VariableEntityData for entity {}: {}, using default values",
                             base.id.as_str(), e
                         );
-                        // Use default values
                         let default_data = VariableEntityData::default();
                         Box::new(VariableEntity {
                             base,
@@ -427,7 +420,6 @@ impl Database {
                             "Failed to parse DomainConceptEntityData for entity {}: {}, using default values",
                             base.id.as_str(), e
                         );
-                        // Use default values
                         let default_data = DomainConceptEntityData::default();
                         Box::new(DomainConceptEntity {
                             base,
@@ -451,10 +443,8 @@ impl Database {
         let weight: f32 = row.get(4)?;
         let metadata_json: Option<String> = row.get(5)?;
 
-        // Parse relationship type
         let rel_type = parse_relationship_type(&relationship_type_str);
 
-        // Parse metadata if present with improved error handling
         let metadata = if let Some(meta_str) = metadata_json {
             match serde_json::from_str(&meta_str) {
                 Ok(meta) => meta,
@@ -500,7 +490,7 @@ impl Database {
                 }
                 Err(e) => {
                     error!("Failed to read entity row: {}", e);
-                    continue; // Skip this row and continue with the next one
+                    continue;
                 }
             }
         }
@@ -528,7 +518,7 @@ impl Database {
                 }
                 Err(e) => {
                     error!("Failed to read relationship row: {}", e);
-                    continue; // Skip this row and continue with the next one
+                    continue;
                 }
             }
         }
