@@ -240,7 +240,7 @@ impl<'a> DbQueryExecutor<'a> {
     }
 
     /// Validate an attribute name against the allowed column whitelist
-    fn validate_attribute_name<'b>(&self, name: &'b str) -> Result<&'b str> {
+    fn validate_attribute_name(&self, name: &str) -> Result<&str> {
         if ALLOWED_COLUMNS.contains(&name) {
             Ok(name)
         } else {
