@@ -4,6 +4,7 @@ use log::{debug, error, info};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::params;
+use std::collections::HashMap;
 use std::path::Path;
 
 use crate::graph::entity::{
@@ -11,7 +12,7 @@ use crate::graph::entity::{
     FunctionEntity, FunctionEntityData, ModuleEntity, ModuleEntityData, TypeEntity, TypeEntityData,
     VariableEntity, VariableEntityData,
 };
-use crate::graph::relationship::{Relationship, RelationshipType};
+use crate::graph::relationship::{Relationship, RelationshipId, RelationshipType};
 
 /// Get a database instance - this is a convenience method that just calls Database::new
 pub fn get_database(path: &str) -> Result<Database> {
@@ -263,125 +264,80 @@ impl Database {
         }
     }
 
-    /// Load all entities from the database
-    pub fn load_entities(&self) -> Result<Vec<Box<dyn Entity>>> {
-        info!("Loading all entities from {}", self.db_path);
+    /// Helper method to parse a database row into a BaseEntity
+    fn row_to_base_entity(&self, row: &rusqlite::Row) -> rusqlite::Result<BaseEntity> {
+        let id: String = row.get(0)?;
+        let name: String = row.get(1)?;
+        let entity_type_str: String = row.get(2)?;
+        let file_path: Option<String> = row.get(3)?;
+        let location_json: Option<String> = row.get(4)?;
+        let documentation: Option<String> = row.get(5)?;
+        let containing_entity: Option<String> = row.get(6)?;
 
-        // Get a connection from the pool
-        let conn = self.get_connection()?;
-        let mut stmt = conn.prepare(
-            "SELECT id, name, entity_type, file_path, location, documentation, containing_entity, data 
-             FROM entities"
-        )?;
+        let entity_type = parse_entity_type(&entity_type_str);
 
-        let rows = stmt.query_map([], |row| {
-            let id: String = row.get(0)?;
-            let name: String = row.get(1)?;
-            let entity_type: String = row.get(2)?;
-            let file_path: Option<String> = row.get(3)?;
-            let location_json: Option<String> = row.get(4)?;
-            let documentation: Option<String> = row.get(5)?;
-            let containing_entity: Option<String> = row.get(6)?;
-            let data_json: String = row.get(7)?;
-
-            Ok((
-                id,
-                name,
-                entity_type,
-                file_path,
-                location_json,
-                documentation,
-                containing_entity,
-                data_json,
-            ))
-        })?;
-
-        let mut entities = Vec::new();
-
-        for row_result in rows {
-            let result = row_result.map_err(|e| anyhow::anyhow!("Error reading entity row: {}", e));
-
-            let (
-                id,
-                name,
-                entity_type_str,
-                file_path,
-                location_json,
-                documentation,
-                containing_entity,
-                data_json,
-            ) = match result {
-                Ok(data) => data,
+        let location = if let Some(loc_str) = location_json {
+            match serde_json::from_str(&loc_str) {
+                Ok(loc) => Some(loc),
                 Err(e) => {
-                    error!("Failed to read entity row: {}", e);
-                    continue; // Skip this row and continue with the next one
+                    error!("Failed to parse location for entity {}: {}", id, e);
+                    None
                 }
-            };
+            }
+        } else {
+            None
+        };
 
-            // Parse entity type
-            let entity_type = parse_entity_type(&entity_type_str);
+        let mut base = BaseEntity::new(EntityId::new(&id), name, entity_type, file_path);
 
-            // Parse location if present
-            let location = if let Some(loc_str) = location_json {
-                match serde_json::from_str(&loc_str) {
-                    Ok(loc) => Some(loc),
+        base.location = location;
+        base.documentation = documentation;
+        base.containing_entity = containing_entity.map(|id| EntityId::new(&id));
+
+        Ok(base)
+    }
+
+    /// Helper method to create a specific entity type from a BaseEntity and data_json
+    fn create_specific_entity(&self, base: BaseEntity, data_json: &str) -> Box<dyn Entity> {
+        match base.entity_type.clone() {
+            EntityType::Function | EntityType::Method => {
+                match serde_json::from_str::<FunctionEntityData>(data_json) {
+                    Ok(data) => Box::new(FunctionEntity {
+                        base,
+                        parameters: data.parameters,
+                        return_type: data.return_type,
+                        visibility: data.visibility,
+                        is_async: data.is_async,
+                        is_static: data.is_static,
+                        is_constructor: data.is_constructor,
+                        is_abstract: data.is_abstract,
+                    }),
                     Err(e) => {
-                        error!("Failed to parse location for entity {}: {}", id, e);
-                        None
-                    }
-                }
-            } else {
-                None
-            };
-
-            // Create BaseEntity
-            let mut base =
-                BaseEntity::new(EntityId::new(&id), name, entity_type.clone(), file_path);
-
-            base.location = location;
-            base.documentation = documentation;
-            base.containing_entity = containing_entity.map(|id| EntityId::new(&id));
-
-            // Create specific entity based on type, with improved error handling
-            let entity: Box<dyn Entity> = match entity_type {
-                EntityType::Function | EntityType::Method => {
-                    match serde_json::from_str::<FunctionEntityData>(&data_json) {
-                        Ok(data) => Box::new(FunctionEntity {
+                        error!(
+                            "Failed to parse FunctionEntityData for entity {}: {}, using default values",
+                            base.id.as_str(), e
+                        );
+                        let default_data = FunctionEntityData::default();
+                        Box::new(FunctionEntity {
                             base,
-                            parameters: data.parameters,
-                            return_type: data.return_type,
-                            visibility: data.visibility,
-                            is_async: data.is_async,
-                            is_static: data.is_static,
-                            is_constructor: data.is_constructor,
-                            is_abstract: data.is_abstract,
-                        }),
-                        Err(e) => {
-                            error!(
-                                "Failed to parse FunctionEntityData for entity {}: {}, trying with default values",
-                                id, e
-                            );
-                            // Try to parse with relaxed settings or use default values
-                            let default_data = FunctionEntityData::default();
-                            Box::new(FunctionEntity {
-                                base,
-                                parameters: default_data.parameters,
-                                return_type: default_data.return_type,
-                                visibility: default_data.visibility,
-                                is_async: default_data.is_async,
-                                is_static: default_data.is_static,
-                                is_constructor: default_data.is_constructor,
-                                is_abstract: default_data.is_abstract,
-                            })
-                        }
+                            parameters: default_data.parameters,
+                            return_type: default_data.return_type,
+                            visibility: default_data.visibility,
+                            is_async: default_data.is_async,
+                            is_static: default_data.is_static,
+                            is_constructor: default_data.is_constructor,
+                            is_abstract: default_data.is_abstract,
+                        })
                     }
                 }
-                EntityType::Class
-                | EntityType::Interface
-                | EntityType::Trait
-                | EntityType::Struct
-                | EntityType::Enum
-                | EntityType::Type => match serde_json::from_str::<TypeEntityData>(&data_json) {
+            }
+            EntityType::Class
+            | EntityType::Interface
+            | EntityType::Trait
+            | EntityType::Struct
+            | EntityType::Enum
+            | EntityType::Type => {
+                match serde_json::from_str::<TypeEntityData>(data_json) {
                     Ok(data) => Box::new(TypeEntity {
                         base,
                         fields: data.fields,
@@ -391,8 +347,8 @@ impl Database {
                         is_abstract: data.is_abstract,
                     }),
                     Err(e) => {
-                        error!("Failed to parse TypeEntityData for entity {}: {}, trying with default values", id, e);
-                        // Use default values
+                        error!("Failed to parse TypeEntityData for entity {}: {}, using default values", 
+                        base.id.as_str(), e);
                         let default_data = TypeEntityData::default();
                         Box::new(TypeEntity {
                             base,
@@ -403,86 +359,182 @@ impl Database {
                             is_abstract: default_data.is_abstract,
                         })
                     }
-                },
-                EntityType::Module | EntityType::File => {
-                    match serde_json::from_str::<ModuleEntityData>(&data_json) {
-                        Ok(data) => Box::new(ModuleEntity {
+                }
+            }
+            EntityType::Module | EntityType::File => {
+                match serde_json::from_str::<ModuleEntityData>(data_json) {
+                    Ok(data) => Box::new(ModuleEntity {
+                        base,
+                        path: data.path,
+                        children: data.children,
+                        imports: data.imports,
+                    }),
+                    Err(e) => {
+                        error!("Failed to parse ModuleEntityData for entity {}: {}, using default values", 
+                            base.id.as_str(), e);
+                        let default_data = ModuleEntityData::default();
+                        Box::new(ModuleEntity {
                             base,
-                            path: data.path,
-                            children: data.children,
-                            imports: data.imports,
-                        }),
-                        Err(e) => {
-                            error!("Failed to parse ModuleEntityData for entity {}: {}, trying with default values", id, e);
-                            // Use default values
-                            let default_data = ModuleEntityData::default();
-                            Box::new(ModuleEntity {
-                                base,
-                                path: default_data.path,
-                                children: default_data.children,
-                                imports: default_data.imports,
-                            })
-                        }
+                            path: default_data.path,
+                            children: default_data.children,
+                            imports: default_data.imports,
+                        })
                     }
                 }
-                EntityType::Variable | EntityType::Field | EntityType::Constant => {
-                    match serde_json::from_str::<VariableEntityData>(&data_json) {
-                        Ok(data) => Box::new(VariableEntity {
+            }
+            EntityType::Variable | EntityType::Field | EntityType::Constant => {
+                match serde_json::from_str::<VariableEntityData>(data_json) {
+                    Ok(data) => Box::new(VariableEntity {
+                        base,
+                        type_annotation: data.type_annotation,
+                        visibility: data.visibility,
+                        is_const: data.is_const,
+                        is_static: data.is_static,
+                    }),
+                    Err(e) => {
+                        error!(
+                            "Failed to parse VariableEntityData for entity {}: {}, using default values",
+                            base.id.as_str(), e
+                        );
+                        let default_data = VariableEntityData::default();
+                        Box::new(VariableEntity {
                             base,
-                            type_annotation: data.type_annotation,
-                            visibility: data.visibility,
-                            is_const: data.is_const,
-                            is_static: data.is_static,
-                        }),
-                        Err(e) => {
-                            error!(
-                                "Failed to parse VariableEntityData for entity {}: {}, trying with default values",
-                                id, e
-                            );
-                            // Use default values
-                            let default_data = VariableEntityData::default();
-                            Box::new(VariableEntity {
-                                base,
-                                type_annotation: default_data.type_annotation,
-                                visibility: default_data.visibility,
-                                is_const: default_data.is_const,
-                                is_static: default_data.is_static,
-                            })
-                        }
+                            type_annotation: default_data.type_annotation,
+                            visibility: default_data.visibility,
+                            is_const: default_data.is_const,
+                            is_static: default_data.is_static,
+                        })
                     }
                 }
-                EntityType::DomainConcept => {
-                    match serde_json::from_str::<DomainConceptEntityData>(&data_json) {
-                        Ok(data) => Box::new(DomainConceptEntity {
+            }
+            EntityType::DomainConcept => {
+                match serde_json::from_str::<DomainConceptEntityData>(data_json) {
+                    Ok(data) => Box::new(DomainConceptEntity {
+                        base,
+                        attributes: data.attributes,
+                        description: data.description,
+                        confidence: data.confidence,
+                    }),
+                    Err(e) => {
+                        error!(
+                            "Failed to parse DomainConceptEntityData for entity {}: {}, using default values",
+                            base.id.as_str(), e
+                        );
+                        let default_data = DomainConceptEntityData::default();
+                        Box::new(DomainConceptEntity {
                             base,
-                            attributes: data.attributes,
-                            description: data.description,
-                            confidence: data.confidence,
-                        }),
-                        Err(e) => {
-                            error!(
-                                "Failed to parse DomainConceptEntityData for entity {}: {}, trying with default values",
-                                id, e
-                            );
-                            // Use default values
-                            let default_data = DomainConceptEntityData::default();
-                            Box::new(DomainConceptEntity {
-                                base,
-                                attributes: default_data.attributes,
-                                description: default_data.description,
-                                confidence: default_data.confidence,
-                            })
-                        }
+                            attributes: default_data.attributes,
+                            description: default_data.description,
+                            confidence: default_data.confidence,
+                        })
                     }
                 }
-                _ => Box::new(base),
-            };
+            }
+            _ => Box::new(base),
+        }
+    }
 
-            entities.push(entity);
+    /// Helper method to parse a database row into a Relationship
+    fn row_to_relationship(&self, row: &rusqlite::Row) -> rusqlite::Result<Relationship> {
+        let id: String = row.get(0)?;
+        let source_id: String = row.get(1)?;
+        let target_id: String = row.get(2)?;
+        let relationship_type_str: String = row.get(3)?;
+        let weight: f32 = row.get(4)?;
+        let metadata_json: Option<String> = row.get(5)?;
+
+        let rel_type = parse_relationship_type(&relationship_type_str);
+
+        let metadata = if let Some(meta_str) = metadata_json {
+            match serde_json::from_str(&meta_str) {
+                Ok(meta) => meta,
+                Err(e) => {
+                    error!("Failed to parse metadata for relationship {}: {}", id, e);
+                    HashMap::new()
+                }
+            }
+        } else {
+            HashMap::new()
+        };
+
+        Ok(Relationship {
+            id: RelationshipId::new(&id),
+            source_id: EntityId::new(&source_id),
+            target_id: EntityId::new(&target_id),
+            relationship_type: rel_type,
+            weight,
+            metadata,
+        })
+    }
+
+    /// Generic method to load entities with a custom query and parameters
+    fn load_entities_with_query(
+        &self,
+        query: &str,
+        params: &[&dyn rusqlite::ToSql],
+    ) -> Result<Vec<Box<dyn Entity>>> {
+        let conn = self.get_connection()?;
+        let mut stmt = conn.prepare(query)?;
+
+        let rows = stmt.query_map(params, |row| {
+            let base = self.row_to_base_entity(row)?;
+            let data_json: String = row.get(7)?;
+            Ok((base, data_json))
+        })?;
+
+        let mut entities = Vec::new();
+        for row_result in rows {
+            match row_result {
+                Ok((base, data_json)) => {
+                    entities.push(self.create_specific_entity(base, &data_json));
+                }
+                Err(e) => {
+                    error!("Failed to read entity row: {}", e);
+                    continue;
+                }
+            }
         }
 
         debug!("Loaded {} entities from database", entities.len());
         Ok(entities)
+    }
+
+    /// Generic method to load relationships with a custom query and parameters
+    fn load_relationships_with_query(
+        &self,
+        query: &str,
+        params: &[&dyn rusqlite::ToSql],
+    ) -> Result<Vec<Relationship>> {
+        let conn = self.get_connection()?;
+        let mut stmt = conn.prepare(query)?;
+
+        let rows = stmt.query_map(params, |row| self.row_to_relationship(row))?;
+
+        let mut relationships = Vec::new();
+        for row_result in rows {
+            match row_result {
+                Ok(relationship) => {
+                    relationships.push(relationship);
+                }
+                Err(e) => {
+                    error!("Failed to read relationship row: {}", e);
+                    continue;
+                }
+            }
+        }
+
+        debug!("Loaded {} relationships from database", relationships.len());
+        Ok(relationships)
+    }
+
+    /// Load all entities from the database
+    pub fn load_entities(&self) -> Result<Vec<Box<dyn Entity>>> {
+        info!("Loading all entities from {}", self.db_path);
+
+        let query = "SELECT id, name, entity_type, file_path, location, documentation, containing_entity, data 
+                    FROM entities";
+
+        self.load_entities_with_query(query, &[])
     }
 
     /// Load a single entity by ID
@@ -493,7 +545,6 @@ impl Database {
             self.db_path
         );
 
-        // Get a connection from the pool
         let conn = self.get_connection()?;
         let mut stmt = conn.prepare(
             "SELECT id, name, entity_type, file_path, location, documentation, containing_entity, data 
@@ -502,258 +553,27 @@ impl Database {
 
         let mut rows = stmt.query([id.as_str()])?;
 
-        if let Some(row_result) = rows.next()? {
-            let id: String = row_result.get(0)?;
-            let name: String = row_result.get(1)?;
-            let entity_type_str: String = row_result.get(2)?;
-            let file_path: Option<String> = row_result.get(3)?;
-            let location_json: Option<String> = row_result.get(4)?;
-            let documentation: Option<String> = row_result.get(5)?;
-            let containing_entity: Option<String> = row_result.get(6)?;
-            let data_json: String = row_result.get(7)?;
+        if let Some(row) = rows.next()? {
+            let base = self.row_to_base_entity(row)?;
+            let data_json: String = row.get(7)?;
+            let entity = self.create_specific_entity(base, &data_json);
 
-            // Parse entity type
-            let entity_type = parse_entity_type(&entity_type_str);
-
-            // Parse location if present
-            let location = if let Some(loc_str) = location_json {
-                match serde_json::from_str(&loc_str) {
-                    Ok(loc) => Some(loc),
-                    Err(e) => {
-                        error!("Failed to parse location for entity {}: {}", id, e);
-                        None
-                    }
-                }
-            } else {
-                None
-            };
-
-            // Create BaseEntity
-            let mut base =
-                BaseEntity::new(EntityId::new(&id), name, entity_type.clone(), file_path);
-
-            base.location = location;
-            base.documentation = documentation;
-            base.containing_entity = containing_entity.map(|id| EntityId::new(&id));
-
-            // Create specific entity based on type, with improved error handling
-            let entity: Box<dyn Entity> = match entity_type {
-                EntityType::Function | EntityType::Method => {
-                    match serde_json::from_str::<FunctionEntityData>(&data_json) {
-                        Ok(data) => Box::new(FunctionEntity {
-                            base,
-                            parameters: data.parameters,
-                            return_type: data.return_type,
-                            visibility: data.visibility,
-                            is_async: data.is_async,
-                            is_static: data.is_static,
-                            is_constructor: data.is_constructor,
-                            is_abstract: data.is_abstract,
-                        }),
-                        Err(e) => {
-                            error!(
-                                "Failed to parse FunctionEntityData for entity {}: {}, trying with default values",
-                                id, e
-                            );
-                            // Try to parse with relaxed settings or use default values
-                            let default_data = FunctionEntityData::default();
-                            Box::new(FunctionEntity {
-                                base,
-                                parameters: default_data.parameters,
-                                return_type: default_data.return_type,
-                                visibility: default_data.visibility,
-                                is_async: default_data.is_async,
-                                is_static: default_data.is_static,
-                                is_constructor: default_data.is_constructor,
-                                is_abstract: default_data.is_abstract,
-                            })
-                        }
-                    }
-                }
-                EntityType::Class
-                | EntityType::Interface
-                | EntityType::Trait
-                | EntityType::Struct
-                | EntityType::Enum
-                | EntityType::Type => match serde_json::from_str::<TypeEntityData>(&data_json) {
-                    Ok(data) => Box::new(TypeEntity {
-                        base,
-                        fields: data.fields,
-                        methods: data.methods,
-                        supertypes: data.supertypes,
-                        visibility: data.visibility,
-                        is_abstract: data.is_abstract,
-                    }),
-                    Err(e) => {
-                        error!("Failed to parse TypeEntityData for entity {}: {}, trying with default values", id, e);
-                        // Use default values
-                        let default_data = TypeEntityData::default();
-                        Box::new(TypeEntity {
-                            base,
-                            fields: default_data.fields,
-                            methods: default_data.methods,
-                            supertypes: default_data.supertypes,
-                            visibility: default_data.visibility,
-                            is_abstract: default_data.is_abstract,
-                        })
-                    }
-                },
-                EntityType::Module | EntityType::File => {
-                    match serde_json::from_str::<ModuleEntityData>(&data_json) {
-                        Ok(data) => Box::new(ModuleEntity {
-                            base,
-                            path: data.path,
-                            children: data.children,
-                            imports: data.imports,
-                        }),
-                        Err(e) => {
-                            error!("Failed to parse ModuleEntityData for entity {}: {}, trying with default values", id, e);
-                            // Use default values
-                            let default_data = ModuleEntityData::default();
-                            Box::new(ModuleEntity {
-                                base,
-                                path: default_data.path,
-                                children: default_data.children,
-                                imports: default_data.imports,
-                            })
-                        }
-                    }
-                }
-                EntityType::Variable | EntityType::Field | EntityType::Constant => {
-                    match serde_json::from_str::<VariableEntityData>(&data_json) {
-                        Ok(data) => Box::new(VariableEntity {
-                            base,
-                            type_annotation: data.type_annotation,
-                            visibility: data.visibility,
-                            is_const: data.is_const,
-                            is_static: data.is_static,
-                        }),
-                        Err(e) => {
-                            error!(
-                                "Failed to parse VariableEntityData for entity {}: {}, trying with default values",
-                                id, e
-                            );
-                            // Use default values
-                            let default_data = VariableEntityData::default();
-                            Box::new(VariableEntity {
-                                base,
-                                type_annotation: default_data.type_annotation,
-                                visibility: default_data.visibility,
-                                is_const: default_data.is_const,
-                                is_static: default_data.is_static,
-                            })
-                        }
-                    }
-                }
-                EntityType::DomainConcept => {
-                    match serde_json::from_str::<DomainConceptEntityData>(&data_json) {
-                        Ok(data) => Box::new(DomainConceptEntity {
-                            base,
-                            attributes: data.attributes,
-                            description: data.description,
-                            confidence: data.confidence,
-                        }),
-                        Err(e) => {
-                            error!(
-                                "Failed to parse DomainConceptEntityData for entity {}: {}, trying with default values",
-                                id, e
-                            );
-                            // Use default values
-                            let default_data = DomainConceptEntityData::default();
-                            Box::new(DomainConceptEntity {
-                                base,
-                                attributes: default_data.attributes,
-                                description: default_data.description,
-                                confidence: default_data.confidence,
-                            })
-                        }
-                    }
-                }
-                _ => Box::new(base),
-            };
-
-            debug!("Successfully loaded entity {}", id);
-            return Ok(Some(entity));
+            debug!("Successfully loaded entity {}", id.as_str());
+            Ok(Some(entity))
+        } else {
+            debug!("Entity with ID {} not found", id.as_str());
+            Ok(None)
         }
-
-        debug!("Entity with ID {} not found", id.as_str());
-        Ok(None)
     }
 
     /// Load all relationships from the database
     pub fn load_relationships(&self) -> Result<Vec<Relationship>> {
         info!("Loading all relationships from {}", self.db_path);
 
-        // Get a connection from the pool
-        let conn = self.get_connection()?;
-        let mut stmt = conn.prepare(
-            "SELECT id, source_id, target_id, relationship_type, weight, metadata 
-             FROM relationships",
-        )?;
+        let query = "SELECT id, source_id, target_id, relationship_type, weight, metadata 
+                    FROM relationships";
 
-        let rows = stmt.query_map([], |row| {
-            let id: String = row.get(0)?;
-            let source_id: String = row.get(1)?;
-            let target_id: String = row.get(2)?;
-            let relationship_type: String = row.get(3)?;
-            let weight: f32 = row.get(4)?;
-            let metadata_json: Option<String> = row.get(5)?;
-
-            Ok((
-                id,
-                source_id,
-                target_id,
-                relationship_type,
-                weight,
-                metadata_json,
-            ))
-        })?;
-
-        let mut relationships = Vec::new();
-
-        for row_result in rows {
-            let result =
-                row_result.map_err(|e| anyhow::anyhow!("Error reading relationship row: {}", e));
-
-            let (id, source_id, target_id, relationship_type_str, weight, metadata_json) =
-                match result {
-                    Ok(data) => data,
-                    Err(e) => {
-                        error!("Failed to read relationship row: {}", e);
-                        continue; // Skip this row and continue with the next one
-                    }
-                };
-
-            // Parse relationship type
-            let rel_type = parse_relationship_type(&relationship_type_str);
-
-            // Parse metadata if present with improved error handling
-            let metadata = if let Some(meta_str) = metadata_json {
-                match serde_json::from_str(&meta_str) {
-                    Ok(meta) => meta,
-                    Err(e) => {
-                        error!("Failed to parse metadata for relationship {}: {}", id, e);
-                        std::collections::HashMap::new()
-                    }
-                }
-            } else {
-                std::collections::HashMap::new()
-            };
-
-            let relationship = Relationship {
-                id: crate::graph::relationship::RelationshipId::new(&id),
-                source_id: EntityId::new(&source_id),
-                target_id: EntityId::new(&target_id),
-                relationship_type: rel_type,
-                weight,
-                metadata,
-            };
-
-            relationships.push(relationship);
-        }
-
-        debug!("Loaded {} relationships from database", relationships.len());
-        Ok(relationships)
+        self.load_relationships_with_query(query, &[])
     }
 
     /// Load relationships for a specific entity (both incoming and outgoing)
@@ -764,81 +584,11 @@ impl Database {
             self.db_path
         );
 
-        // Get a connection from the pool
-        let conn = self.get_connection()?;
-        let mut stmt = conn.prepare(
-            "SELECT id, source_id, target_id, relationship_type, weight, metadata 
-             FROM relationships 
-             WHERE source_id = ? OR target_id = ?",
-        )?;
+        let query = "SELECT id, source_id, target_id, relationship_type, weight, metadata 
+                    FROM relationships 
+                    WHERE source_id = ? OR target_id = ?";
 
-        let rows = stmt.query_map([entity_id.as_str(), entity_id.as_str()], |row| {
-            let id: String = row.get(0)?;
-            let source_id: String = row.get(1)?;
-            let target_id: String = row.get(2)?;
-            let relationship_type: String = row.get(3)?;
-            let weight: f32 = row.get(4)?;
-            let metadata_json: Option<String> = row.get(5)?;
-
-            Ok((
-                id,
-                source_id,
-                target_id,
-                relationship_type,
-                weight,
-                metadata_json,
-            ))
-        })?;
-
-        let mut relationships = Vec::new();
-
-        for row_result in rows {
-            let result =
-                row_result.map_err(|e| anyhow::anyhow!("Error reading relationship row: {}", e));
-
-            let (id, source_id, target_id, relationship_type_str, weight, metadata_json) =
-                match result {
-                    Ok(data) => data,
-                    Err(e) => {
-                        error!("Failed to read relationship row: {}", e);
-                        continue; // Skip this row and continue with the next one
-                    }
-                };
-
-            // Parse relationship type
-            let rel_type = parse_relationship_type(&relationship_type_str);
-
-            // Parse metadata if present with improved error handling
-            let metadata = if let Some(meta_str) = metadata_json {
-                match serde_json::from_str(&meta_str) {
-                    Ok(meta) => meta,
-                    Err(e) => {
-                        error!("Failed to parse metadata for relationship {}: {}", id, e);
-                        std::collections::HashMap::new()
-                    }
-                }
-            } else {
-                std::collections::HashMap::new()
-            };
-
-            let relationship = Relationship {
-                id: crate::graph::relationship::RelationshipId::new(&id),
-                source_id: EntityId::new(&source_id),
-                target_id: EntityId::new(&target_id),
-                relationship_type: rel_type,
-                weight,
-                metadata,
-            };
-
-            relationships.push(relationship);
-        }
-
-        debug!(
-            "Loaded {} relationships for entity {}",
-            relationships.len(),
-            entity_id.as_str()
-        );
-        Ok(relationships)
+        self.load_relationships_with_query(query, &[&entity_id.as_str(), &entity_id.as_str()])
     }
 
     /// Load outgoing relationships for a specific entity
@@ -849,81 +599,11 @@ impl Database {
             self.db_path
         );
 
-        // Get a connection from the pool
-        let conn = self.get_connection()?;
-        let mut stmt = conn.prepare(
-            "SELECT id, source_id, target_id, relationship_type, weight, metadata 
-             FROM relationships 
-             WHERE source_id = ?",
-        )?;
+        let query = "SELECT id, source_id, target_id, relationship_type, weight, metadata 
+                    FROM relationships 
+                    WHERE source_id = ?";
 
-        let rows = stmt.query_map([entity_id.as_str()], |row| {
-            let id: String = row.get(0)?;
-            let source_id: String = row.get(1)?;
-            let target_id: String = row.get(2)?;
-            let relationship_type: String = row.get(3)?;
-            let weight: f32 = row.get(4)?;
-            let metadata_json: Option<String> = row.get(5)?;
-
-            Ok((
-                id,
-                source_id,
-                target_id,
-                relationship_type,
-                weight,
-                metadata_json,
-            ))
-        })?;
-
-        let mut relationships = Vec::new();
-
-        for row_result in rows {
-            let result =
-                row_result.map_err(|e| anyhow::anyhow!("Error reading relationship row: {}", e));
-
-            let (id, source_id, target_id, relationship_type_str, weight, metadata_json) =
-                match result {
-                    Ok(data) => data,
-                    Err(e) => {
-                        error!("Failed to read relationship row: {}", e);
-                        continue; // Skip this row and continue with the next one
-                    }
-                };
-
-            // Parse relationship type
-            let rel_type = parse_relationship_type(&relationship_type_str);
-
-            // Parse metadata if present with improved error handling
-            let metadata = if let Some(meta_str) = metadata_json {
-                match serde_json::from_str(&meta_str) {
-                    Ok(meta) => meta,
-                    Err(e) => {
-                        error!("Failed to parse metadata for relationship {}: {}", id, e);
-                        std::collections::HashMap::new()
-                    }
-                }
-            } else {
-                std::collections::HashMap::new()
-            };
-
-            let relationship = Relationship {
-                id: crate::graph::relationship::RelationshipId::new(&id),
-                source_id: EntityId::new(&source_id),
-                target_id: EntityId::new(&target_id),
-                relationship_type: rel_type,
-                weight,
-                metadata,
-            };
-
-            relationships.push(relationship);
-        }
-
-        debug!(
-            "Loaded {} outgoing relationships for entity {}",
-            relationships.len(),
-            entity_id.as_str()
-        );
-        Ok(relationships)
+        self.load_relationships_with_query(query, &[&entity_id.as_str()])
     }
 
     /// Load relationships by relationship type
@@ -936,81 +616,11 @@ impl Database {
             rel_type, self.db_path
         );
 
-        // Get a connection from the pool
-        let conn = self.get_connection()?;
-        let mut stmt = conn.prepare(
-            "SELECT id, source_id, target_id, relationship_type, weight, metadata 
-             FROM relationships 
-             WHERE relationship_type = ?",
-        )?;
+        let query = "SELECT id, source_id, target_id, relationship_type, weight, metadata 
+                    FROM relationships 
+                    WHERE relationship_type = ?";
 
-        let rows = stmt.query_map([rel_type.to_string()], |row| {
-            let id: String = row.get(0)?;
-            let source_id: String = row.get(1)?;
-            let target_id: String = row.get(2)?;
-            let relationship_type: String = row.get(3)?;
-            let weight: f32 = row.get(4)?;
-            let metadata_json: Option<String> = row.get(5)?;
-
-            Ok((
-                id,
-                source_id,
-                target_id,
-                relationship_type,
-                weight,
-                metadata_json,
-            ))
-        })?;
-
-        let mut relationships = Vec::new();
-
-        for row_result in rows {
-            let result =
-                row_result.map_err(|e| anyhow::anyhow!("Error reading relationship row: {}", e));
-
-            let (id, source_id, target_id, relationship_type_str, weight, metadata_json) =
-                match result {
-                    Ok(data) => data,
-                    Err(e) => {
-                        error!("Failed to read relationship row: {}", e);
-                        continue; // Skip this row and continue with the next one
-                    }
-                };
-
-            // Parse relationship type
-            let rel_type = parse_relationship_type(&relationship_type_str);
-
-            // Parse metadata if present with improved error handling
-            let metadata = if let Some(meta_str) = metadata_json {
-                match serde_json::from_str(&meta_str) {
-                    Ok(meta) => meta,
-                    Err(e) => {
-                        error!("Failed to parse metadata for relationship {}: {}", id, e);
-                        std::collections::HashMap::new()
-                    }
-                }
-            } else {
-                std::collections::HashMap::new()
-            };
-
-            let relationship = Relationship {
-                id: crate::graph::relationship::RelationshipId::new(&id),
-                source_id: EntityId::new(&source_id),
-                target_id: EntityId::new(&target_id),
-                relationship_type: rel_type,
-                weight,
-                metadata,
-            };
-
-            relationships.push(relationship);
-        }
-
-        debug!(
-            "Loaded {} relationships of type {:?}",
-            relationships.len(),
-            rel_type
-        );
-        Ok(relationships)
+        self.load_relationships_with_query(query, &[&rel_type.to_string()])
     }
 
     /// Get the total number of relationships by SQL count
@@ -1149,9 +759,6 @@ impl Database {
             entity_type, self.db_path
         );
 
-        // Get a connection from the pool
-        let conn = self.get_connection()?;
-
         // Build the base query
         let mut sql = String::from(
             "SELECT id, name, entity_type, file_path, location, documentation, containing_entity, data 
@@ -1165,221 +772,10 @@ impl Database {
             sql.push_str(cond);
         }
 
-        let mut stmt = conn.prepare(&sql)?;
-
         // Convert entity type to string
         let entity_type_str = entity_type.to_string();
 
-        // Execute the query
-        let rows = stmt.query_map([entity_type_str], |row| {
-            let id: String = row.get(0)?;
-            let name: String = row.get(1)?;
-            let entity_type: String = row.get(2)?;
-            let file_path: Option<String> = row.get(3)?;
-            let location_json: Option<String> = row.get(4)?;
-            let documentation: Option<String> = row.get(5)?;
-            let containing_entity: Option<String> = row.get(6)?;
-            let data_json: String = row.get(7)?;
-
-            Ok((
-                id,
-                name,
-                entity_type,
-                file_path,
-                location_json,
-                documentation,
-                containing_entity,
-                data_json,
-            ))
-        })?;
-
-        let mut entities = Vec::new();
-
-        for row_result in rows {
-            let result = row_result.map_err(|e| anyhow::anyhow!("Error reading entity row: {}", e));
-
-            let (
-                id,
-                name,
-                entity_type_str,
-                file_path,
-                location_json,
-                documentation,
-                containing_entity,
-                data_json,
-            ) = match result {
-                Ok(data) => data,
-                Err(e) => {
-                    error!("Failed to read entity row: {}", e);
-                    continue; // Skip this row and continue with the next one
-                }
-            };
-
-            // Parse entity type
-            let entity_type = parse_entity_type(&entity_type_str);
-
-            // Parse location if present
-            let location = if let Some(loc_str) = location_json {
-                match serde_json::from_str(&loc_str) {
-                    Ok(loc) => Some(loc),
-                    Err(e) => {
-                        error!("Failed to parse location for entity {}: {}", id, e);
-                        None
-                    }
-                }
-            } else {
-                None
-            };
-
-            // Create BaseEntity
-            let mut base =
-                BaseEntity::new(EntityId::new(&id), name, entity_type.clone(), file_path);
-
-            base.location = location;
-            base.documentation = documentation;
-            base.containing_entity = containing_entity.map(|id| EntityId::new(&id));
-
-            // Create specific entity based on type, with improved error handling
-            let entity: Box<dyn Entity> = match entity_type {
-                EntityType::Function | EntityType::Method => {
-                    match serde_json::from_str::<FunctionEntityData>(&data_json) {
-                        Ok(data) => Box::new(FunctionEntity {
-                            base,
-                            parameters: data.parameters,
-                            return_type: data.return_type,
-                            visibility: data.visibility,
-                            is_async: data.is_async,
-                            is_static: data.is_static,
-                            is_constructor: data.is_constructor,
-                            is_abstract: data.is_abstract,
-                        }),
-                        Err(e) => {
-                            error!(
-                                "Failed to parse FunctionEntityData for entity {}: {}, trying with default values",
-                                id, e
-                            );
-                            // Try to parse with relaxed settings or use default values
-                            let default_data = FunctionEntityData::default();
-                            Box::new(FunctionEntity {
-                                base,
-                                parameters: default_data.parameters,
-                                return_type: default_data.return_type,
-                                visibility: default_data.visibility,
-                                is_async: default_data.is_async,
-                                is_static: default_data.is_static,
-                                is_constructor: default_data.is_constructor,
-                                is_abstract: default_data.is_abstract,
-                            })
-                        }
-                    }
-                }
-                EntityType::Class
-                | EntityType::Interface
-                | EntityType::Trait
-                | EntityType::Struct
-                | EntityType::Enum
-                | EntityType::Type => match serde_json::from_str::<TypeEntityData>(&data_json) {
-                    Ok(data) => Box::new(TypeEntity {
-                        base,
-                        fields: data.fields,
-                        methods: data.methods,
-                        supertypes: data.supertypes,
-                        visibility: data.visibility,
-                        is_abstract: data.is_abstract,
-                    }),
-                    Err(e) => {
-                        error!("Failed to parse TypeEntityData for entity {}: {}, trying with default values", id, e);
-                        // Use default values
-                        let default_data = TypeEntityData::default();
-                        Box::new(TypeEntity {
-                            base,
-                            fields: default_data.fields,
-                            methods: default_data.methods,
-                            supertypes: default_data.supertypes,
-                            visibility: default_data.visibility,
-                            is_abstract: default_data.is_abstract,
-                        })
-                    }
-                },
-                EntityType::Module | EntityType::File => {
-                    match serde_json::from_str::<ModuleEntityData>(&data_json) {
-                        Ok(data) => Box::new(ModuleEntity {
-                            base,
-                            path: data.path,
-                            children: data.children,
-                            imports: data.imports,
-                        }),
-                        Err(e) => {
-                            error!("Failed to parse ModuleEntityData for entity {}: {}, trying with default values", id, e);
-                            // Use default values
-                            let default_data = ModuleEntityData::default();
-                            Box::new(ModuleEntity {
-                                base,
-                                path: default_data.path,
-                                children: default_data.children,
-                                imports: default_data.imports,
-                            })
-                        }
-                    }
-                }
-                EntityType::Variable | EntityType::Field | EntityType::Constant => {
-                    match serde_json::from_str::<VariableEntityData>(&data_json) {
-                        Ok(data) => Box::new(VariableEntity {
-                            base,
-                            type_annotation: data.type_annotation,
-                            visibility: data.visibility,
-                            is_const: data.is_const,
-                            is_static: data.is_static,
-                        }),
-                        Err(e) => {
-                            error!(
-                                "Failed to parse VariableEntityData for entity {}: {}, trying with default values",
-                                id, e
-                            );
-                            // Use default values
-                            let default_data = VariableEntityData::default();
-                            Box::new(VariableEntity {
-                                base,
-                                type_annotation: default_data.type_annotation,
-                                visibility: default_data.visibility,
-                                is_const: default_data.is_const,
-                                is_static: default_data.is_static,
-                            })
-                        }
-                    }
-                }
-                EntityType::DomainConcept => {
-                    match serde_json::from_str::<DomainConceptEntityData>(&data_json) {
-                        Ok(data) => Box::new(DomainConceptEntity {
-                            base,
-                            attributes: data.attributes,
-                            description: data.description,
-                            confidence: data.confidence,
-                        }),
-                        Err(e) => {
-                            error!(
-                                "Failed to parse DomainConceptEntityData for entity {}: {}, trying with default values",
-                                id, e
-                            );
-                            // Use default values
-                            let default_data = DomainConceptEntityData::default();
-                            Box::new(DomainConceptEntity {
-                                base,
-                                attributes: default_data.attributes,
-                                description: default_data.description,
-                                confidence: default_data.confidence,
-                            })
-                        }
-                    }
-                }
-                _ => Box::new(base),
-            };
-
-            entities.push(entity);
-        }
-
-        debug!("Query returned {} entities", entities.len());
-        Ok(entities)
+        self.load_entities_with_query(&sql, &[&entity_type_str])
     }
 
     /// Find paths between entities using recursive CTEs in SQLite
