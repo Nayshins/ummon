@@ -13,7 +13,7 @@
 
 > **⚠️ WARNING: This project is in early development and is not yet stable. APIs and functionality may change significantly between versions.**
 
-Ummon is a code analysis tool that builds knowledge graphs from codebases to enhance understanding, improve AI assistance, and enable sophisticated querying. It creates connections between code entities (functions, classes, modules) and domain concepts, making it easier to reason about complex software systems.
+Ummon is a code analysis tool that builds knowledge graphs from codebases to enhance understanding, improve AI assistance, and enable sophisticated querying. It creates connections between code entities (functions, classes, modules) and domain concepts, making it easier to reason about complex software systems and identify relevant code for specific tasks.
 
 Named after the AI Ummon from Dan Simmons' Hyperion Cantos, this project provides deep insights into codebases that help both humans and AI assistants better understand software systems.
 
@@ -37,7 +37,15 @@ Named after the AI Ummon from Dan Simmons' Hyperion Cantos, this project provide
    - Examples: "select functions where name like 'auth%'", "show me all authentication functions"
    - See [Query System Documentation](docs/query_system.md) for more details
 
-3. **Domain Model Extraction**
+3. **Relevance Agent**
+   - Suggests code files relevant to a proposed change or query
+   - Uses semantic analysis to extract technical keywords from natural language descriptions
+   - Identifies related entities in the knowledge graph using entity relationships
+   - Scores files by relevance using both proximity and graph centrality metrics
+   - Enables context-aware assistance with a ranked list of most relevant files
+   - Example: For "Fix authentication bug", it identifies auth-related files
+
+4. **Domain Model Extraction**
    - Uses LLMs to identify business entities and concepts
    - Maps domain concepts to implementation details
    - Creates a bridge between technical and business understanding
@@ -91,6 +99,9 @@ ummon query "select functions where file_path like 'src/auth/%'" --no-llm
 
 # Generate AI-assisted recommendations
 ummon assist "implement a user registration function"
+
+# Get relevant file suggestions for a proposed change
+ummon assist --suggest-files "fix authentication token validation"
 ```
 
 ## Configuration
@@ -109,6 +120,7 @@ Ummon is built with a modular architecture:
 - SQLite database with metadata tracking for efficient updates
 - Intelligent update mechanisms for incremental indexing
 - LLM integration for semantic understanding
+- Relevance agent for context-aware assistance
 - Command-line interface for user interaction
 
 ### Language Support
