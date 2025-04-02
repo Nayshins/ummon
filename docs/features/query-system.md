@@ -1,3 +1,8 @@
+---
+title: Query System
+description: Search and analyze your codebase with structured and natural language queries
+---
+
 # Ummon Query System
 
 The Ummon query system allows you to search and analyze your codebase using both a structured query language and natural language queries. This guide explains how to use the query system effectively.
@@ -166,8 +171,3 @@ The query system consists of:
 2. **Executor** - Performs the actual search against the knowledge graph
 3. **Formatter** - Presents results in different formats
 4. **NL Translator** - Converts natural language to structured queries using LLMs
-
-## Further Reading
-
-For more information about Ummon, see:
-- [README.md](../README.md) - Project overview
