@@ -688,9 +688,7 @@ impl LanguageParser for RustParser {
                 // Process all types directly inside a module
                 if let Some(name_node) = node.child_by_field_name("name") {
                     if let Ok(module_name) = name_node.utf8_text(content.as_bytes()) {
-                        // Find the module body
                         if let Some(body) = node.child_by_field_name("body") {
-                            // Look for types in the module
                             traverse_node(body, &mut |child_node| {
                                 if matches!(
                                     child_node.kind(),
@@ -699,12 +697,10 @@ impl LanguageParser for RustParser {
                                     if let Some(mut type_def) =
                                         self.extract_type_details(child_node, content, file_path)
                                     {
-                                        // Set the containing module
                                         type_def.containing_entity_name =
                                             Some(module_name.to_string());
                                         types.push(type_def);
 
-                                        // Find nested types within this type
                                         let nested_types =
                                             self.find_nested_types(child_node, content, file_path);
                                         types.extend(nested_types);
@@ -717,7 +713,6 @@ impl LanguageParser for RustParser {
             }
         });
 
-        // Then find top-level types (not in modules)
         traverse_node(root_node, &mut |node| {
             if matches!(
                 node.kind(),

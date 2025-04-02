@@ -506,7 +506,6 @@ impl PythonParser {
             .ok()?
             .to_string();
 
-        // Extract superclasses
         let mut super_types = Vec::new();
         if let Some(bases) = node.child_by_field_name("superclasses") {
             for i in 0..bases.named_child_count() {
@@ -518,10 +517,8 @@ impl PythonParser {
             }
         }
 
-        // Extract fields
         let fields = self.extract_class_fields(node, content);
 
-        // Extract methods
         let mut methods = Vec::new();
         traverse_node(node, &mut |n| {
             if n.kind() == "function_definition" {
@@ -533,7 +530,6 @@ impl PythonParser {
             }
         });
 
-        // Check if this class has a containing class
         let containing_entity_name = node
             .parent()
             .filter(|parent| parent.kind() == "block")
@@ -603,7 +599,6 @@ impl LanguageParser for PythonParser {
         let parser = self;
         traverse_node(root_node, &mut |node| {
             if node.kind() == "class_definition" {
-                // Check if this is a top-level class (not nested)
                 let mut is_top_level = true;
                 if let Some(parent) = node.parent() {
                     if parent.kind() == "block" {
@@ -615,12 +610,9 @@ impl LanguageParser for PythonParser {
                     }
                 }
 
-                // Only process top-level classes here - nested classes will be found recursively
                 if is_top_level {
                     if let Some(type_def) = parser.extract_type_details(node, content, file_path) {
                         types.push(type_def);
-
-                        // Find nested classes within this class
                         let nested_classes = parser.find_nested_classes(node, content, file_path);
                         types.extend(nested_classes);
                     }
@@ -695,12 +687,10 @@ impl LanguageParser for PythonParser {
                     })
                     .unwrap_or(true);
 
-                // Only add top-level functions
                 if is_top_level {
                     if let Some(func) = self.extract_function_details(node, content, file_path) {
                         functions.push(func);
 
-                        // Find nested functions with functional chain for name extraction
                         let name = node
                             .child_by_field_name("name")
                             .and_then(|name_node| name_node.utf8_text(content.as_bytes()).ok())
@@ -714,7 +704,6 @@ impl LanguageParser for PythonParser {
             }
         });
 
-        // Second pass: find functions within classes (methods)
         traverse_node(root_node, &mut |node| {
             if node.kind() == "class_definition" {
                 let class_name = node
@@ -728,7 +717,6 @@ impl LanguageParser for PythonParser {
             }
         });
 
-        // Third pass: find lambda functions
         traverse_node(root_node, &mut |node| {
             if node.kind() == "lambda" {
                 if let Some(lambda_func) = self.extract_function_details(node, content, file_path) {

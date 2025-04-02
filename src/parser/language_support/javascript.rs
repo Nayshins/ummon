@@ -156,7 +156,6 @@ impl JavaScriptParser {
                 })
             }
             "arrow_function" => {
-                // For arrow functions, try to find variable assignment name
                 let name = {
                     let mut current = node;
                     let mut result = None;
@@ -301,7 +300,6 @@ impl LanguageParser for JavaScriptParser {
             .parser
             .parse(content, None)
             .ok_or_else(|| {
-                // Provide detailed error message with file info
                 let filename = Path::new(file_path)
                     .file_name()
                     .and_then(|n| n.to_str())
@@ -317,7 +315,6 @@ impl LanguageParser for JavaScriptParser {
         let mut functions = Vec::new();
         let root_node = tree.root_node();
 
-        // Log parsing statistics
         tracing::debug!(
             "Parsed JavaScript file '{}' ({} bytes) - AST has {} nodes",
             file_path,
@@ -343,18 +340,15 @@ impl LanguageParser for JavaScriptParser {
     /// # Returns
     /// * `Result<Vec<CallReference>>` - List of extracted function call references or an error
     fn parse_calls(&mut self, content: &str, file_path: &str) -> Result<Vec<CallReference>> {
-        // Validate conten
         if content.is_empty() {
             tracing::debug!("Empty file content for '{}'", file_path);
-            return Ok(Vec::new()); // Return empty result for empty files
+            return Ok(Vec::new());
         }
 
-        // Try to parse with tree-sitter
         let tree = self
             .parser
             .parse(content, None)
             .ok_or_else(|| {
-                // Provide detailed error message with file info
                 let filename = Path::new(file_path)
                     .file_name()
                     .and_then(|n| n.to_str())
@@ -370,7 +364,6 @@ impl LanguageParser for JavaScriptParser {
         let mut calls = Vec::new();
         let root_node = tree.root_node();
 
-        // Log parsing statistics
         tracing::debug!(
             "Parsing function calls from JavaScript file '{}' ({} bytes)",
             file_path,

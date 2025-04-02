@@ -25,20 +25,16 @@ impl JavaParser {
         content: &str,
         file_path: &str,
     ) -> Option<FunctionDefinition> {
-        // Check if this is a method declaration
         if node.kind() != "method_declaration" && node.kind() != "constructor_declaration" {
             return None;
         }
 
-        // Get method name
         let name = if node.kind() == "method_declaration" {
             node.child_by_field_name("name")?
                 .utf8_text(content.as_bytes())
                 .ok()?
                 .to_string()
         } else {
-            // Constructor name comes from the class name
-            // We need to find the parent class
             let mut current = node;
             while let Some(parent) = current.parent() {
                 if parent.kind() == "class_declaration" {
@@ -59,10 +55,9 @@ impl JavaParser {
                 }
                 current = parent;
             }
-            return None; // Couldn't find parent class
+            return None;
         };
 
-        // Determine containing type
         let mut containing_type = None;
         let mut current = node;
         while let Some(parent) = current.parent() {
@@ -510,7 +505,6 @@ impl LanguageParser for JavaParser {
         content: &str,
         file_path: &str,
     ) -> Result<Vec<FunctionDefinition>> {
-        // Handle empty content case gracefully
         if content.is_empty() {
             tracing::debug!("Empty Java file content for '{}'", file_path);
             return Ok(Vec::new());
@@ -604,7 +598,6 @@ impl LanguageParser for JavaParser {
             .parser
             .parse(content, None)
             .ok_or_else(|| {
-                // Provide detailed error message with file info
                 let filename = Path::new(file_path)
                     .file_name()
                     .and_then(|n| n.to_str())
@@ -633,23 +626,20 @@ impl LanguageParser for JavaParser {
                     if let Ok(name) = name_node.utf8_text(content.as_bytes()) {
                         let mut fully_qualified_name = None;
 
-                        // Check if there's an object reference for this method call
                         if let Some(object_node) = node.child_by_field_name("object") {
                             if let Ok(object_name) = object_node.utf8_text(content.as_bytes()) {
                                 fully_qualified_name = Some(format!("{}.{}", object_name, name));
                             }
                         }
 
-                        // Create location for the call
                         let location = node_to_location(node);
 
-                        // Use helper method to create the call reference
                         calls.push(CallReference::with_details(
                             name.to_string(),
                             fully_qualified_name,
                             Some(location),
                             Some(file_path.to_string()),
-                            Vec::new(), // We'll add argument extraction later
+                            Vec::new(),
                         ));
                     }
                 }
