@@ -1,4 +1,5 @@
 use super::*;
+use super::{node_to_location, traverse_node};
 use tree_sitter::{Node, Parser};
 
 pub struct PythonParser {
@@ -16,18 +17,6 @@ impl PythonParser {
         let mut parser = Parser::new();
         parser.set_language(tree_sitter_python::language()).unwrap();
         Self { parser }
-    }
-
-    #[allow(clippy::only_used_in_recursion)]
-    fn traverse_node<F>(&self, node: Node, f: &mut F)
-    where
-        F: FnMut(Node),
-    {
-        f(node);
-        let mut cursor = node.walk();
-        for child in node.children(&mut cursor) {
-            self.traverse_node(child, f);
-        }
     }
 
     fn extract_function_details(
@@ -373,18 +362,7 @@ impl PythonParser {
 
     /// Creates a Location object from a tree-sitter node
     fn create_location_from_node(&self, node: Node) -> Location {
-        Location {
-            start: Position {
-                line: node.start_position().row,
-                column: node.start_position().column,
-                offset: node.start_byte(),
-            },
-            end: Position {
-                line: node.end_position().row,
-                column: node.end_position().column,
-                offset: node.end_byte(),
-            },
-        }
+        node_to_location(node)
     }
 
     /// Extracts fields from a Python class definition
@@ -441,7 +419,7 @@ impl PythonParser {
 
         // Find direct child classes within this class
         if let Some(body) = node.child_by_field_name("body") {
-            self.traverse_node(body, &mut |child_node| {
+            traverse_node(body, &mut |child_node| {
                 if child_node.kind() == "class_definition" {
                     if let Some(mut class_def) =
                         self.extract_type_details(child_node, content, file_path)
@@ -478,7 +456,7 @@ impl PythonParser {
 
         // Use optional chaining with map to avoid nested if-lets
         if let Some(body) = node.child_by_field_name("body") {
-            self.traverse_node(body, &mut |child_node| {
+            traverse_node(body, &mut |child_node| {
                 if child_node.kind() == "function_definition" {
                     // Try to extract the function details and process if successful
                     if let Some(mut func) =
@@ -545,7 +523,7 @@ impl PythonParser {
 
         // Extract methods
         let mut methods = Vec::new();
-        self.traverse_node(node, &mut |n| {
+        traverse_node(node, &mut |n| {
             if n.kind() == "function_definition" {
                 if let Some(method_name) = n.child_by_field_name("name") {
                     if let Ok(name) = method_name.utf8_text(content.as_bytes()) {
@@ -573,18 +551,7 @@ impl PythonParser {
             file_path: file_path.to_string(),
             kind: TypeKind::Class,
             visibility: Visibility::Public, // Python classes are generally public
-            location: Location {
-                start: Position {
-                    line: node.start_position().row,
-                    column: node.start_position().column,
-                    offset: node.start_byte(),
-                },
-                end: Position {
-                    line: node.end_position().row,
-                    column: node.end_position().column,
-                    offset: node.end_byte(),
-                },
-            },
+            location: node_to_location(node),
             super_types,
             fields,
             methods,
@@ -634,7 +601,7 @@ impl LanguageParser for PythonParser {
         );
 
         let parser = self;
-        parser.traverse_node(root_node, &mut |node| {
+        traverse_node(root_node, &mut |node| {
             if node.kind() == "class_definition" {
                 // Check if this is a top-level class (not nested)
                 let mut is_top_level = true;
@@ -713,7 +680,7 @@ impl LanguageParser for PythonParser {
         );
 
         // First pass: extract top-level functions
-        self.traverse_node(root_node, &mut |node| {
+        traverse_node(root_node, &mut |node| {
             if node.kind() == "function_definition" {
                 // Check if this is a top-level function using functional chain
                 let is_top_level = node
@@ -748,7 +715,7 @@ impl LanguageParser for PythonParser {
         });
 
         // Second pass: find functions within classes (methods)
-        self.traverse_node(root_node, &mut |node| {
+        traverse_node(root_node, &mut |node| {
             if node.kind() == "class_definition" {
                 let class_name = node
                     .child_by_field_name("name")
@@ -762,7 +729,7 @@ impl LanguageParser for PythonParser {
         });
 
         // Third pass: find lambda functions
-        self.traverse_node(root_node, &mut |node| {
+        traverse_node(root_node, &mut |node| {
             if node.kind() == "lambda" {
                 if let Some(lambda_func) = self.extract_function_details(node, content, file_path) {
                     functions.push(lambda_func);
@@ -810,7 +777,7 @@ impl LanguageParser for PythonParser {
             root_node.child_count()
         );
 
-        self.traverse_node(root_node, &mut |node| {
+        traverse_node(root_node, &mut |node| {
             if node.kind() == "call" {
                 if let Some(func) = node.child_by_field_name("function") {
                     if let Ok(name) = func.utf8_text(content.as_bytes()) {

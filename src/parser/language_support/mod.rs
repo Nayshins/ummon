@@ -15,6 +15,58 @@ pub mod rust;
 /// List of supported source file extensions.
 pub const SUPPORTED_EXTENSIONS: &[&str] = &["rs", "py", "js", "java"];
 
+/// Recursively traverses a node and its children, applying a callback function to each node.
+///
+/// # Arguments
+/// * `node` - The tree-sitter Node to traverse
+/// * `f` - Mutable callback function to apply to each node
+///
+/// # Example
+/// ```ignore
+/// traverse_node(root_node, &mut |node| {
+///     if node.kind() == "function_declaration" {
+///         // Process function node
+///     }
+/// });
+/// ```
+pub fn traverse_node<F>(node: tree_sitter::Node, f: &mut F)
+where
+    F: FnMut(tree_sitter::Node),
+{
+    f(node);
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        traverse_node(child, f);
+    }
+}
+
+/// Converts a tree-sitter Node to a Location struct.
+///
+/// # Arguments
+/// * `node` - The tree-sitter Node to convert
+///
+/// # Returns
+/// * `Location` - A Location struct containing start and end positions
+///
+/// # Example
+/// ```ignore
+/// let location = node_to_location(node);
+/// ```
+pub fn node_to_location(node: tree_sitter::Node) -> Location {
+    Location {
+        start: Position {
+            line: node.start_position().row,
+            column: node.start_position().column,
+            offset: node.start_byte(),
+        },
+        end: Position {
+            line: node.end_position().row,
+            column: node.end_position().column,
+            offset: node.end_byte(),
+        },
+    }
+}
+
 /// Checks if the given path is a supported source file based on its extension.
 pub fn is_supported_source_file(path: &Path) -> bool {
     path.extension()

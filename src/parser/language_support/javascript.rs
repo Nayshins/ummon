@@ -1,4 +1,5 @@
 use super::*;
+use super::{node_to_location, traverse_node};
 use anyhow::Result;
 use std::path::Path;
 use tree_sitter::{Node, Parser};
@@ -102,18 +103,7 @@ impl JavaScriptParser {
                     file_path: file_path.to_string(),
                     kind: FunctionKind::Function,
                     visibility: Visibility::Default,
-                    location: Location {
-                        start: Position {
-                            line: node.start_position().row,
-                            column: node.start_position().column,
-                            offset: node.start_byte(),
-                        },
-                        end: Position {
-                            line: node.end_position().row,
-                            column: node.end_position().column,
-                            offset: node.end_byte(),
-                        },
-                    },
+                    location: node_to_location(node),
                     containing_type: None,
                     parameters: self.extract_parameters(node, content),
                     containing_entity_name: None,
@@ -159,18 +149,7 @@ impl JavaScriptParser {
                         FunctionKind::Method
                     },
                     visibility,
-                    location: Location {
-                        start: Position {
-                            line: node.start_position().row,
-                            column: node.start_position().column,
-                            offset: node.start_byte(),
-                        },
-                        end: Position {
-                            line: node.end_position().row,
-                            column: node.end_position().column,
-                            offset: node.end_byte(),
-                        },
-                    },
+                    location: node_to_location(node),
                     containing_type: containing_type.clone(),
                     parameters: self.extract_parameters(node, content),
                     containing_entity_name: containing_type,
@@ -205,18 +184,7 @@ impl JavaScriptParser {
                     file_path: file_path.to_string(),
                     kind: FunctionKind::Lambda,
                     visibility: Visibility::Default,
-                    location: Location {
-                        start: Position {
-                            line: node.start_position().row,
-                            column: node.start_position().column,
-                            offset: node.start_byte(),
-                        },
-                        end: Position {
-                            line: node.end_position().row,
-                            column: node.end_position().column,
-                            offset: node.end_byte(),
-                        },
-                    },
+                    location: node_to_location(node),
                     containing_type: None,
                     parameters: self.extract_parameters(node, content),
                     containing_entity_name: None,
@@ -245,18 +213,6 @@ impl JavaScriptParser {
                 ))
             }
             _ => None,
-        }
-    }
-
-    #[allow(clippy::only_used_in_recursion)]
-    fn traverse_node<F>(&self, node: Node, f: &mut F)
-    where
-        F: FnMut(Node),
-    {
-        f(node);
-        let mut cursor = node.walk();
-        for child in node.children(&mut cursor) {
-            self.traverse_node(child, f);
         }
     }
 
@@ -369,7 +325,7 @@ impl LanguageParser for JavaScriptParser {
             root_node.child_count()
         );
 
-        self.traverse_node(root_node, &mut |node| {
+        traverse_node(root_node, &mut |node| {
             if let Some(func) = self.extract_function_details(node, content, file_path) {
                 functions.push(func);
             }
@@ -421,23 +377,12 @@ impl LanguageParser for JavaScriptParser {
             content.len()
         );
 
-        self.traverse_node(root_node, &mut |node| {
+        traverse_node(root_node, &mut |node| {
             if node.kind() == "call_expression" {
                 if let Some(function) = node.child_by_field_name("function") {
                     if let Some((name, full_path)) = self.extract_call_name(function, content) {
                         // Create location
-                        let location = Location {
-                            start: Position {
-                                line: node.start_position().row,
-                                column: node.start_position().column,
-                                offset: node.start_byte(),
-                            },
-                            end: Position {
-                                line: node.end_position().row,
-                                column: node.end_position().column,
-                                offset: node.end_byte(),
-                            },
-                        };
+                        let location = node_to_location(node);
 
                         // Use helper method from CallReference
                         calls.push(CallReference::with_details(
@@ -501,7 +446,7 @@ impl LanguageParser for JavaScriptParser {
             content.len()
         );
 
-        self.traverse_node(root_node, &mut |node| {
+        traverse_node(root_node, &mut |node| {
             if node.kind() == "class_declaration" {
                 let name = node
                     .child_by_field_name("name")
@@ -512,7 +457,7 @@ impl LanguageParser for JavaScriptParser {
                 // Get methods
                 let mut methods = Vec::new();
                 if let Some(body) = node.child_by_field_name("body") {
-                    self.traverse_node(body, &mut |method_node| {
+                    traverse_node(body, &mut |method_node| {
                         if method_node.kind() == "method_definition" {
                             if let Some(method_name) = method_node.child_by_field_name("name") {
                                 if let Ok(name) = method_name.utf8_text(content.as_bytes()) {
@@ -531,18 +476,7 @@ impl LanguageParser for JavaScriptParser {
                     file_path: file_path.to_string(),
                     kind: TypeKind::Class,
                     visibility: Visibility::Public, // JavaScript classes are public by defaul
-                    location: Location {
-                        start: Position {
-                            line: node.start_position().row,
-                            column: node.start_position().column,
-                            offset: node.start_byte(),
-                        },
-                        end: Position {
-                            line: node.end_position().row,
-                            column: node.end_position().column,
-                            offset: node.end_byte(),
-                        },
-                    },
+                    location: node_to_location(node),
                     super_types: Vec::new(), // No inheritance info ye
                     fields: Vec::new(),      // No fields extraction ye
                     methods,
