@@ -1,25 +1,6 @@
 # Ummon Development Guide
 
-## Issue #37 Implementation Status
-We've implemented the following steps for "Parsing Improvements":
-1. ✅ Completed (earlier)
-2. ✅ Completed (earlier)
-3. ✅ Completed (earlier)
-4. ✅ Improve parser robustness
-   - Added empty content validation in all parsers
-   - Added bounds checking for string operations to prevent panics
-   - Improved error messages with better context (filename, file size)
-   - Added tracing/logging for better diagnostics
-5. ✅ Standardize parser interface
-   - Created well-documented consistent interface for all language parsers
-   - Enhanced CallReference with more context (location, file path, arguments)
-   - Added shared helper methods for common operations (safe_extract_text)
-   - Added default implementations for optional interfaces
-6. ✅ Test enhanced parsers
-   - Fixed Clippy warnings in code (improved functional style)
-   - Removed unused code (dead code elimination)
-   - Enhanced code style with better patterns (if let vs map for side effects)
-   - Argument extraction tested in all parsers
+*IMPORTANT* Make sure to follow these rules when writing code in this repository
 
 ## Build & Test Commands
 ```bash
