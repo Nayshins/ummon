@@ -1,57 +1,15 @@
 mod db_executor;
-mod executor;
 mod formatter;
 mod nl_translator;
 mod parser;
 
 pub use db_executor::DbQueryExecutor;
-pub use executor::QueryExecutor;
 pub use formatter::{OutputFormat, ResultFormatter};
 pub use nl_translator::NaturalLanguageTranslator;
 pub use parser::parse_query;
 
-use crate::{graph::knowledge_graph::KnowledgeGraph, prompt::llm_integration::get_llm_config};
+use crate::prompt::llm_integration::get_llm_config;
 use anyhow::Result;
-
-/// Process a query string and return formatted results
-pub async fn process_query(
-    kg: &KnowledgeGraph,
-    query_str: &str,
-    format_str: &str,
-    natural: bool,
-    llm_provider: Option<&str>,
-    llm_model: Option<&str>,
-) -> Result<String> {
-    // Set up the formatter
-    let format = format_str.parse().unwrap_or(OutputFormat::Text);
-    let formatter = ResultFormatter::new(kg, format);
-
-    // If natural language is enabled, translate query first
-    let query_to_execute = if natural {
-        let config = get_llm_config(llm_provider, llm_model);
-        let translator = NaturalLanguageTranslator::new(config);
-        let (translated, confidence) = translator.translate(query_str).await?;
-
-        // Print the translation information
-        eprintln!("Translated query: {}", translated);
-        eprintln!("Translation confidence: {:.2}", confidence);
-
-        // Return the translated query
-        translated
-    } else {
-        query_str.to_string()
-    };
-
-    // Parse the query
-    let parsed_query = parse_query(&query_to_execute)?;
-
-    // Execute the query
-    let executor = QueryExecutor::new(kg);
-    let results = executor.execute(parsed_query)?;
-
-    // Format and return the results
-    formatter.format(results)
-}
 
 /// Process a query directly using the database without loading everything into memory
 pub async fn process_query_with_db(

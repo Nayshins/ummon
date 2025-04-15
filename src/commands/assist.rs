@@ -2,7 +2,6 @@ use anyhow::Result;
 use colored::Colorize;
 use tracing;
 
-use crate::graph::knowledge_graph::KnowledgeGraph;
 use crate::prompt::context_builder::build_context;
 use crate::prompt::llm_integration::{get_llm_config, query_llm};
 use ummon::agent::relevance_agent::RelevantFile;
@@ -44,21 +43,7 @@ pub async fn run(
         println!();
     }
 
-    println!("{}", "Building knowledge graph context...".italic());
-    let mut kg = KnowledgeGraph::new();
-
-    let entities = db.load_entities()?;
-    entities.into_iter().for_each(|entity| {
-        if let Err(e) = kg.add_boxed_entity(entity) {
-            tracing::warn!("Failed to add entity to knowledge graph: {}", e);
-        }
-    });
-
-    db.load_relationships()?
-        .into_iter()
-        .for_each(|relationship| {
-            kg.add_relationship(relationship);
-        });
+    println!("{}", "Building context from database...".italic());
 
     let file_context = relevant_files
         .iter()
@@ -67,11 +52,11 @@ pub async fn run(
         .join("\n");
 
     let context = if file_context.is_empty() {
-        build_context(&kg, instruction)
+        build_context(&db, instruction)
     } else {
         format!(
             "{}\n\nRelevant files:\n{}",
-            build_context(&kg, instruction),
+            build_context(&db, instruction),
             file_context
         )
     };
