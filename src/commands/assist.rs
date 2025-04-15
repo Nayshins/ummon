@@ -1,6 +1,5 @@
 use anyhow::Result;
 use colored::Colorize;
-use tracing;
 
 use crate::prompt::context_builder::build_context;
 use crate::prompt::llm_integration::{get_llm_config, query_llm};
