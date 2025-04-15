@@ -82,6 +82,17 @@ impl KnowledgeGraph {
         }
     }
 
+    /// Create a new knowledge graph with a database connection
+    pub fn new_with_db(db: crate::db::Database) -> Self {
+        Self {
+            entities: HashMap::new(),
+            relationship_store: RelationshipStore::new(),
+            relationship_data: Vec::new(),
+            search_index: HashMap::new(),
+            database: Some(db),
+        }
+    }
+
     /// Add a boxed entity directly to the graph
     pub fn add_boxed_entity(&mut self, entity: Box<dyn Entity>) -> Result<()> {
         let id = entity.id().clone();
